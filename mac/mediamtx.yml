@@ -1,0 +1,27 @@
+# mediamtx.yml — auto-generovany, nemen rucne
+# Kamery: 1  Streamy: 4
+
+logLevel: info
+logDestinations: [stdout]
+
+rtmp: yes
+rtmpAddress: :1935
+
+api: yes
+apiAddress: :9997
+
+hls: no
+webrtc: no
+srt: no
+
+paths:
+
+  # Kamera 01
+  cam01/0_0:
+    source: publisher
+  cam01/0_1:
+    source: publisher
+  cam01/1_0:
+    source: publisher
+  cam01/1_1:
+    source: publisher

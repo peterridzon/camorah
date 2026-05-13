@@ -1,71 +1,84 @@
-# Camorah
+# Camorah — Orah 4i Control System
 
-Camorah is a python tool aimed to start Orah 4i 360 camera.
-It's not the napolitan mafia...
+> Fork of [nicognaW/camorah](https://github.com/nicognaW/camorah) — extended with a full Mac control app, multi-node recording infrastructure, OBS switching, and MIDI support.
 
+![Architecture](architecture.svg)
 
-### SETUP
+---
 
-You will need a POE module, a dhcp server and a rtmp server to make the setup work.  
-The camera is powered through POE (take care which plug is powered on it).  
-The camera need an ip adress through dhcp.  
-The camera sends its stream in RTMP.  
-RTMP protocol need an intermediate server for publishing video/audio stream (you can't stream from camera to viewer directly with rtmp).  
+## What changed from the original
 
+| | Original | This fork |
+|---|---|---|
+| Camera discovery | ✅ Zeroconf | ✅ same |
+| Start/stop streaming | ✅ CLI | ✅ GUI + CLI |
+| UI | ❌ none | ✅ Mac desktop app |
+| Recording | ❌ none | ✅ FFmpeg streamcopy on Intel nodes |
+| OBS switching | ❌ none | ✅ 4× OBS via WebSocket |
+| MIDI control | ❌ none | ✅ any MIDI device |
+| Multi-node | ❌ none | ✅ scalable Intel PC array |
+| Camera count | fixed | ✅ dynamic (1 to N) |
 
-For dhcp server you can set your own or use your ISP box. There is no limitation.  
+---
 
-For rtmp server we advise to use nginx with rtmp module:  
-download nginx source : http://nginx.org/en/download.html  
-download nginx rtmp module sources : git clone https://github.com/arut/nginx-rtmp-module.git  
-Go in nginx directory and compile it with rtmp support:  
-./configure --add-module=/path/to/nginx-rtmp-module  
-make  
-make install  
-We provide a default nginx.conf file for easy setup but there is no security implemented (anyone can publish and listen on your server).  
-We provide a stat.xsl file for displaying nginx streaming stat through its http server. Put it in the html root dir of the http server.  
+## Key design principle
 
+Recording and live switching are **completely independent**:
 
-### Running camorah tool
+- `FFmpeg` records from the moment cameras start — zero dependency on OBS
+- `OBS` switches scenes only when the operator selects a camera (UI click or MIDI)
+- If OBS crashes, recording continues uninterrupted
+- `streamcopy` = no transcoding, 0% CPU load
 
-You will need the following python libraries as dependencies :  
-autobahn, protobuf, zeroconf  
-you can install them with pip.  
+---
 
+## Files
 
-To start the camorah tool:  
-python3 camorah.py  
-or  
-python3 camorah.py -s 192.168.0.2 -p 2048 -a mystream -d ./rec/  
+```
+mac/
+  ui.py                           Mac desktop app (CustomTkinter)
+  controller.py                   backend: discovery, OBS, HTTP calls
+  midi_controller.py              MIDI pult listener
+  generate_mediamtx_config.py     generates mediamtx.yml dynamically
+  config.json                     node IPs, OBS ports (edit this)
 
-When using no option, we will consider that the rtmp server is on the same computer as camorah and at port 1935 with rtmp app named "inputs".  
-Here is the help page if you want to define another rtmp server or dump the stream:  
+intel/
+  agent.py                        FastAPI recording agent (Linux/Windows)
 
-Camorah  
+architecture.svg                  system diagram
+```
 
-Tool for starting 4i 360 camera from orah  
+---
 
--h | --help	Prints this help screen.  
--s | --server	Set ip address of rtmp server. (default : ip of this device)  
--p | --port	Set port of rtmp server. (default : 1935)  
--a | --app	Set rtmp application name. (default : inputs)  
--d | --dump	Dump streams in specified dir.  
+## Quick start
 
+**Mac M4**
+```bash
+pip install customtkinter httpx obsws-python mido python-rtmidi zeroconf
+python mac/generate_mediamtx_config.py
+./mediamtx mac/mediamtx.yml
+python mac/ui.py
+```
 
-Example:  
-python3 camorah.py  
-python3 camorah.py -s 192.168.0.2 -p 2048 -a mystream -d ./rec/  
+**Intel node**
+```bash
+pip install fastapi uvicorn httpx
+python intel/agent.py --node-id 1 --cameras 1,2,3,4,5,6 --mac-ip 192.168.1.10 --record-dir /mnt/recordings
+```
 
+---
 
-The tool keep running until you kill it as it's continusouly running waiting to detect camera through zeroconf and then start them.  
-Camorah also retrieve a ptv file named "factoryPresetsProject.ptv" followed by the date that you can use as calibration in stitchem.  
+## Network ports
 
+| Port | Device | Purpose |
+|------|--------|---------|
+| 1935 | Mac M4 | RTMP ingest (MediaMTX) |
+| 9997 | Mac M4 | MediaMTX REST API |
+| 4455–4458 | Mac M4 | OBS WebSocket |
+| 8000 | Intel PC | Recording agent API |
 
-### Practical SETUP  
+---
 
-Different setup are possible and have been used (don't forget the POE):  
+## License
 
-Debug or Livestitch at home : Plug your cam in your ISP box, setup a rtmp server and stitchEm Vahana on your PC.  
-Livestitch mobile : Plug your cam in your PC, setup a dhcp server, a rmtp server and stitchEm Vahana on your PC.  
-Record mobile : Plug your cam in a raspberry, setup a dhcp server. a rtmp server on raspberry and dump the  
-                stream on an usb key plug in the raspberry. Stitch the dumps in stichEm Studio.  
+Original: WTFPL — see [LICENSE](LICENSE). Extensions: same.

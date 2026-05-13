@@ -1,0 +1,19 @@
+{
+  "mac_mediamtx_ip": "127.0.0.1",
+  "mac_mediamtx_port": 1935,
+  "obs_instances": [
+    {"id": 1, "port": 4455, "stream": "0_0"},
+    {"id": 2, "port": 4456, "stream": "0_1"},
+    {"id": 3, "port": 4457, "stream": "1_0"},
+    {"id": 4, "port": 4458, "stream": "1_1"}
+  ],
+  "intel_nodes": [
+    {
+      "id": 1,
+      "ip": "192.168.1.20",
+      "port": 8000,
+      "cameras": []
+    }
+  ],
+  "max_cameras_hint": 1
+}
