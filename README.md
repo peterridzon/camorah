@@ -1,5 +1,7 @@
 # Camorah — Orah 4i Control System
 
+> Original Camorah documentation: [CAMORAH_ORIGINAL.md](CAMORAH_ORIGINAL.md)
+
 > Fork of [nicognaW/camorah](https://github.com/nicognaW/camorah) — extended with a full Mac control app, multi-node recording infrastructure, OBS switching, and MIDI support.
 
 ![Architecture](architecture.svg)
