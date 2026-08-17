@@ -29,12 +29,7 @@ struct MultiviewPane: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            // The strip belongs to the desk window only. In a window of its own
-            // this pane is the whole screen — a row of tabs offering to switch
-            // it to a different generator would be offering to turn the wall in
-            // front of you into a different wall, which is not a thing anybody
-            // wants from a screen bolted to a truss.
-            if showsUndock { tabs }
+            paneChips
             HStack(alignment: .top, spacing: 10) {
                 screen
                 rail.frame(width: 336)
@@ -44,50 +39,6 @@ struct MultiviewPane: View {
         .background(Theme.panel)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay { RoundedRectangle(cornerRadius: 10).stroke(Theme.line, lineWidth: 1) }
-    }
-
-    // MARK: - Tabs
-
-    private var tabs: some View {
-        HStack(spacing: 8) {
-            ForEach(1...AppModel.multiviewCount, id: \.self) { number in
-                generatorTab(number)
-            }
-            Spacer()
-            if showsUndock {
-                chip("⇱ Pop out") { openWindow(id: OrahControlApp.multiviewWindow, value: generator) }
-            }
-            chip("Aa labels", on: showsLabels) { showsLabels.toggle() }
-            chip("▮ meters", on: showsMeters) { showsMeters.toggle() }
-        }
-    }
-
-    private func generatorTab(_ number: Int) -> some View {
-        // A generator that is live — open in a window, or this one — wears the
-        // amber frame. The word OPEN said the same thing twice; the frame
-        // already means "this one is running" everywhere else on the desk.
-        let selected = number == generator || model.detachedMultiviews.contains(number)
-        return HStack(spacing: 9) {
-            Circle()
-                .fill(selected ? Theme.amber : Theme.dead)
-                .frame(width: 8, height: 8)
-                .shadow(color: selected ? Theme.amber : .clear, radius: 5)
-            Text("MULTIVIEW \(number)")
-                .font(.system(size: 12, weight: .bold, design: .monospaced)).tracking(1.4)
-            Text("\(model.output(for: number)) · \(model.layout(for: number).title)")
-                .font(Theme.value(11)).foregroundStyle(Theme.dim)
-
-        }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 9)
-            .fill(selected ? Color(hex: 0x1D1913) : Theme.raised))
-        .overlay { RoundedRectangle(cornerRadius: 9)
-            .stroke(selected ? Theme.amber : Theme.line, lineWidth: 1) }
-        .contentShape(Rectangle())
-        // The tab stays whether the generator is in a window or not — it is how
-        // you call it back. Tapping one that is already open brings that window
-        // forward rather than making a second copy of it.
-        .onTapGesture { openWindow(id: OrahControlApp.multiviewWindow, value: number) }
     }
 
     private func chip(_ title: String, on: Bool = false,
@@ -104,6 +55,21 @@ struct MultiviewPane: View {
                     .stroke(on ? Theme.amberGlow : Theme.line, lineWidth: 1) }
         }
         .buttonStyle(.plain)
+    }
+
+    /// Pop out, labels and meters live on the pane because they are about this
+    /// pane. The generator tabs do not — they outlive it.
+    private var paneChips: some View {
+        HStack(spacing: 8) {
+            Spacer()
+            if showsUndock {
+                chip("⇱ Pop out") {
+                    openWindow(id: OrahControlApp.multiviewWindow, value: generator)
+                }
+            }
+            chip("Aa labels", on: showsLabels) { showsLabels.toggle() }
+            chip("▮ meters", on: showsMeters) { showsMeters.toggle() }
+        }
     }
 
     // MARK: - The screen
@@ -590,4 +556,75 @@ private struct SourceTile: View {
         .buttonStyle(.plain)
         .help("Lens \(Switcher.lenses[lens])")
     }
+}
+
+
+/// The generator strip.
+///
+/// It lives in the desk window and not inside the pane, because it has to
+/// survive the pane being pulled onto another screen — the strip is how a
+/// generator is called back, so tying it to the thing it opens would mean the
+/// only way to reach a window is a window you have just closed.
+@MainActor
+struct MultiviewTabs: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
+
+    // MARK: - Tabs
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(1...AppModel.multiviewCount, id: \.self) { number in
+                generatorTab(number)
+            }
+            Spacer()
+        }
+    }
+
+    private func generatorTab(_ number: Int) -> some View {
+        // A generator that is live — on its own screen, or the one embedded in
+        // this window — wears the amber frame. The frame already means "this
+        // one is running" everywhere else on the desk, so a badge saying OPEN
+        // was the same sentence written twice.
+        let selected = model.detachedMultiviews.contains(number)
+            || (number == 1 && model.showsInlineMultiview)
+        return HStack(spacing: 9) {
+            Circle()
+                .fill(selected ? Theme.amber : Theme.dead)
+                .frame(width: 8, height: 8)
+                .shadow(color: selected ? Theme.amber : .clear, radius: 5)
+            Text("MULTIVIEW \(number)")
+                .font(.system(size: 12, weight: .bold, design: .monospaced)).tracking(1.4)
+            Text("\(model.output(for: number)) · \(model.layout(for: number).title)")
+                .font(Theme.value(11)).foregroundStyle(Theme.dim)
+
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 9)
+            .fill(selected ? Color(hex: 0x1D1913) : Theme.raised))
+        .overlay { RoundedRectangle(cornerRadius: 9)
+            .stroke(selected ? Theme.amber : Theme.line, lineWidth: 1) }
+        .contentShape(Rectangle())
+        // The tab stays whether the generator is in a window or not — it is how
+        // you call it back. Tapping one that is already open brings that window
+        // forward rather than making a second copy of it.
+        .onTapGesture { openWindow(id: OrahControlApp.multiviewWindow, value: number) }
+    }
+
+    private func unusedChip(_ title: String, on: Bool = false,
+                      _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(Theme.value(11.5))
+                .padding(.horizontal, 11).padding(.vertical, 6)
+                .foregroundStyle(on ? Color(hex: 0x141417) : Theme.dim)
+                .background(RoundedRectangle(cornerRadius: 7)
+                    .fill(on ? AnyShapeStyle(Theme.amberGradient)
+                             : AnyShapeStyle(Color(hex: 0x232327))))
+                .overlay { RoundedRectangle(cornerRadius: 7)
+                    .stroke(on ? Theme.amberGlow : Theme.line, lineWidth: 1) }
+        }
+        .buttonStyle(.plain)
+    }
+
 }

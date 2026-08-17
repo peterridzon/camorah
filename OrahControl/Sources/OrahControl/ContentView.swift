@@ -26,6 +26,12 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     ScrollView {
                         VStack(spacing: 12) {
+                            // The strip stays whatever happens to the panes —
+                            // it is how a generator on another screen is called
+                            // back, and it cannot live inside the thing it
+                            // opens.
+                            MultiviewTabs()
+
                             // Multiview 1 lives here until it is pulled onto a
                             // screen of its own; then the console moves up into
                             // the space rather than leaving a hole where a wall
