@@ -198,19 +198,19 @@ private struct TransitionBlock: View {
                 futureKey(); futureKey()
             }
 
-            HStack {
-                label("Rate")
-                Spacer()
-                Text(rateText)
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Theme.amber)
+            VStack(spacing: 8) {
+                HStack {
+                    label("Rate")
+                    Spacer()
+                    Text(rateText)
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Theme.amber)
+                }
+                RateSlider(value: $model.transitionMilliseconds, range: 100...3000)
             }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 6).fill(.black))
-            .overlay { RoundedRectangle(cornerRadius: 6).stroke(Theme.line, lineWidth: 1) }
-
-            Slider(value: $model.transitionMilliseconds, in: 100...3000, step: 50)
-                .controlSize(.mini).tint(Theme.amber)
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 9).fill(.black))
+            .overlay { RoundedRectangle(cornerRadius: 9).stroke(Theme.amber, lineWidth: 1.5) }
 
             label("Transition")
             HStack(spacing: 5) {
@@ -284,6 +284,49 @@ private struct TransitionBlock: View {
                     .stroke(armed ? Theme.program : Theme.amber.opacity(0.55), lineWidth: 1.5) }
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// The rate control.
+///
+/// Built rather than borrowed: the system slider draws a white thumb, and on a
+/// desk where amber means "this is the thing under your hand" a white one says
+/// the opposite. What you grab is amber, the track it runs in is not, and the
+/// travelled part fills behind it so the value can be read without looking at
+/// the number.
+@MainActor
+private struct RateSlider: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let knob: CGFloat = 16
+            let travel = max(1, width - knob)
+            let fraction = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
+
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color(hex: 0x1C1712)).frame(height: 5)
+                Capsule().fill(Theme.amberGradient)
+                    .frame(width: max(5, CGFloat(fraction) * travel + knob / 2), height: 5)
+
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Theme.amberGradient)
+                    .frame(width: knob, height: 20)
+                    .overlay { RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color(hex: 0x6B4415), lineWidth: 1) }
+                    .shadow(color: Theme.amber.opacity(0.5), radius: 6)
+                    .offset(x: CGFloat(fraction) * travel)
+            }
+            .frame(height: 22)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { drag in
+                let p = min(max(0, (drag.location.x - knob / 2) / travel), 1)
+                value = range.lowerBound + Double(p) * (range.upperBound - range.lowerBound)
+            })
+        }
+        .frame(height: 22)
     }
 }
 

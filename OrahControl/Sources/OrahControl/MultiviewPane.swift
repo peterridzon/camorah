@@ -29,7 +29,12 @@ struct MultiviewPane: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            tabs
+            // The strip belongs to the desk window only. In a window of its own
+            // this pane is the whole screen — a row of tabs offering to switch
+            // it to a different generator would be offering to turn the wall in
+            // front of you into a different wall, which is not a thing anybody
+            // wants from a screen bolted to a truss.
+            if showsUndock { tabs }
             HStack(alignment: .top, spacing: 10) {
                 screen
                 rail.frame(width: 336)
