@@ -67,6 +67,11 @@ public final class Switcher: @unchecked Sendable {
     /// picture for whoever is watching, and only while somebody is.
     private var inspectSlot: Int?
     private var inspectBypass = false
+
+    /// Cameras the colour panel is watching side by side, and which lens of
+    /// each. Shading one camera against a memory of the others is how a rig
+    /// ends up matched to nothing; they have to be seen together.
+    private var inspectMany: [Int: Int] = [:]
     private var encoders: [H264Encoder?] = Array(repeating: nil, count: 4)
     private var outputs: [FFmpegOutput?] = Array(repeating: nil, count: 4)
 
@@ -156,6 +161,14 @@ public final class Switcher: @unchecked Sendable {
 
     /// The inspected camera's four lenses, graded unless bypassed.
     public var onInspectFrames: (([CVPixelBuffer?]) -> Void)?
+
+    /// One picture per watched camera, graded unless bypassed.
+    public var onInspectCameras: (([Int: CVPixelBuffer]) -> Void)?
+
+    /// Which cameras to make a picture of, and which lens of each.
+    public func inspect(cameras: [Int: Int], bypass: Bool = false) {
+        lock.withLock { inspectMany = cameras; inspectBypass = bypass }
+    }
 
     public func removeSource(slot: Int) {
         lock.withLock { buffers[slot] = nil; grades[slot] = nil }
@@ -398,6 +411,23 @@ public final class Switcher: @unchecked Sendable {
                 guard let frame = lock.withLock({ buffers[watch]?[lens] })?.current() else { continue }
                 pictures[lens] = grade.map { g in
                     (try? graders[lens].grade(frame.pixelBuffer, with: g)) ?? frame.pixelBuffer
+                } ?? frame.pixelBuffer
+            }
+            tap(pictures)
+        }
+
+        // The colour panel's row of cameras. Only the ones it is showing, and
+        // only while it is showing them.
+        let watching = lock.withLock { inspectMany }
+        if !watching.isEmpty, let tap = onInspectCameras {
+            let bypass = lock.withLock { inspectBypass }
+            var pictures: [Int: CVPixelBuffer] = [:]
+            for (slot, lens) in watching {
+                let index = max(0, min(3, lens))
+                guard let frame = lock.withLock({ buffers[slot]?[index] })?.current() else { continue }
+                let grade = bypass ? nil : lock.withLock { grades[slot] }
+                pictures[slot] = grade.map { g in
+                    (try? graders[index].grade(frame.pixelBuffer, with: g)) ?? frame.pixelBuffer
                 } ?? frame.pixelBuffer
             }
             tap(pictures)

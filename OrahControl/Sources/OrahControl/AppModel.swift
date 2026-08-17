@@ -420,6 +420,10 @@ final class AppModel {
                     self.outputSinks[index].push(frame)
                 }
             }
+            switcher.onInspectCameras = { [weak self] pictures in
+                guard let self else { return }
+                for (slot, picture) in pictures { self.cameraSink(slot: slot).push(picture) }
+            }
             switcher.onInspectFrames = { [weak self] pictures in
                 guard let self else { return }
                 for (lens, picture) in pictures.enumerated() where lens < self.inspectSinks.count {
@@ -1583,6 +1587,11 @@ final class AppModel {
 
     func setLens(_ lens: Int, for slot: Int) {
         tileLens[slot] = max(0, min(3, lens))
+        if !cameraSinkStore.isEmpty {
+            switcher?.inspect(cameras: cameraSinkStore.keys.reduce(into: [:]) {
+                $0[$1] = self.lens(for: $1)
+            })
+        }
         // Program and preview are the two the switcher actually decodes, so
         // changing their lens is the one case that has to reach it.
         if slot == programSlot || slot == previewSlot { syncDesk() }
@@ -1637,6 +1646,25 @@ final class AppModel {
     func watch(slot: Int?, bypass: Bool = false) {
         switcher?.inspect(slot: slot, bypass: bypass)
         if slot == nil { for sink in inspectSinks { sink.push(nil) } }
+    }
+
+    /// One sink per camera, for the row of pictures over the colour controls.
+    /// Made on demand — a camera nobody is shading costs nothing.
+    private var cameraSinkStore: [Int: VideoSink] = [:]
+
+    func cameraSink(slot: Int) -> VideoSink {
+        if let existing = cameraSinkStore[slot] { return existing }
+        let made = VideoSink()
+        cameraSinkStore[slot] = made
+        return made
+    }
+
+    /// Watch several cameras at once, each at its own chosen lens.
+    func watch(cameras: [Int], bypass: Bool = false) {
+        var map: [Int: Int] = [:]
+        for slot in cameras { map[slot] = lens(for: slot) }
+        switcher?.inspect(cameras: map, bypass: bypass)
+        if cameras.isEmpty { for sink in cameraSinkStore.values { sink.push(nil) } }
     }
 
     /// The grade for a camera, by slot. Neutral when it has never been touched.
