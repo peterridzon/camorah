@@ -343,12 +343,12 @@ private struct TBarColumn: View {
                                              startPoint: .top, endPoint: .bottom))
                         .frame(width: 26, height: 26)
                 }
-                .offset(y: CGFloat(model.mix) * travel)
+                .offset(y: CGFloat(model.tbarPosition) * travel)
             }
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { value in
                 let p = min(max(0, (value.location.y - handle / 2) / travel), 1)
-                model.setMix(Double(p))
+                model.setTBar(Double(p))
             })
         }
         .frame(width: 66)

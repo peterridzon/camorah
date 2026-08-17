@@ -1044,7 +1044,41 @@ final class AppModel {
         Log.info("desk", "cam\(slot) taken to air from the programme bus")
     }
 
-    /// The T-bar, or a MIDI fader. Reaching the end completes the transition.
+    /// Where the T-bar handle physically is, 0 at the top, 1 at the bottom.
+    ///
+    /// Kept apart from `mix` because they are not the same thing. The mix is
+    /// how far through a transition we are; the handle is where somebody's hand
+    /// left it. They only agree while a transition is running in the downward
+    /// direction.
+    var tbarPosition: Double = 0
+
+    /// The end the current transition started from.
+    private var tbarAnchor: Double = 0
+
+    /// The T-bar, or a MIDI fader.
+    ///
+    /// Flip-flop, as every hardware desk does it: pull it down to make the
+    /// transition, and it **stays** at the bottom. The next transition is made
+    /// by pushing it back up. Snapping the handle back to the top after every
+    /// take is the behaviour of a progress bar, not of a fader — the hand is
+    /// still on it, and it would fight you.
+    func setTBar(_ value: Double) {
+        transitionTask?.cancel()
+        tbarPosition = min(max(value, 0), 1)
+
+        let travelled = abs(tbarPosition - tbarAnchor)
+        if travelled >= 0.999 {
+            swap()
+            tbarAnchor = tbarPosition   // the far end becomes the new start
+            switcher?.setMix(0)
+            return
+        }
+        mix = travelled
+        switcher?.setMix(Float(travelled))
+    }
+
+    /// Kept for MIDI and anything else that thinks in mix rather than in
+    /// handle position.
     func setMix(_ value: Double) {
         transitionTask?.cancel()
         mix = min(max(value, 0), 1)
@@ -1053,6 +1087,9 @@ final class AppModel {
     }
 
     private func swap() {
+        // The handle is not moved here on purpose. AUTO and CUT run the
+        // transition without it, and yanking it across the desk while an
+        // operator's hand rests on it is the one thing a fader must never do.
         let old = programSlot
         programSlot = previewSlot
         previewSlot = old
