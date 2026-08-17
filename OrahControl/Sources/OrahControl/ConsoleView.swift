@@ -209,7 +209,10 @@ private struct TransitionBlock: View {
                 RateSlider(value: $model.transitionMilliseconds, range: 100...3000)
             }
             .padding(10)
-            .background(RoundedRectangle(cornerRadius: 9).fill(.black))
+            // Grey, not black. A black well inside a dark panel reads as a hole
+            // punched through it; the same tone as its surroundings lets the
+            // amber do the work without the frame shouting.
+            .background(RoundedRectangle(cornerRadius: 9).fill(Theme.raised))
             .overlay { RoundedRectangle(cornerRadius: 9).stroke(Theme.amber, lineWidth: 1.5) }
 
             label("Transition")
@@ -307,7 +310,7 @@ private struct RateSlider: View {
             let fraction = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
 
             ZStack(alignment: .leading) {
-                Capsule().fill(Color(hex: 0x1C1712)).frame(height: 5)
+                Capsule().fill(Color(hex: 0x2E2E2C)).frame(height: 5)
                 Capsule().fill(Theme.amberGradient)
                     .frame(width: max(5, CGFloat(fraction) * travel + knob / 2), height: 5)
 
@@ -366,9 +369,10 @@ private struct TBarColumn: View {
             let travel = max(1, height - handle)
 
             ZStack(alignment: .top) {
-                RoundedRectangle(cornerRadius: 8).fill(.black)
-                    .overlay { RoundedRectangle(cornerRadius: 8).stroke(Theme.line, lineWidth: 1) }
-                    .shadow(color: .black.opacity(0.9), radius: 12)
+                RoundedRectangle(cornerRadius: 8).fill(Theme.raised)
+                    .overlay { RoundedRectangle(cornerRadius: 8)
+                        .stroke(Theme.lineHi, lineWidth: 1) }
+                    .shadow(color: .black.opacity(0.5), radius: 8)
 
                 // A real T: a crossbar to grab and a stem that keeps it in the
                 // track. The crossbar overhangs on both sides so it can be
@@ -420,7 +424,7 @@ private struct Ladder: View {
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(lit ? Color(hue: 0.094, saturation: 0.92,
                                       brightness: 0.42 + position * 0.5)
-                              : Color(hex: 0x1C1712))
+                              : Color(hex: 0x2A2622))
                     .frame(width: 13, height: 8)
                     .shadow(color: lit ? Theme.amber.opacity(0.5 + position * 0.4) : .clear,
                             radius: 3 + position * 4)
