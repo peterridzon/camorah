@@ -26,7 +26,11 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     ScrollView {
                         VStack(spacing: 12) {
-                            MultiviewPane()
+                            // Multiview 1 lives here until it is pulled onto a
+                            // screen of its own; then the console moves up into
+                            // the space rather than leaving a hole where a wall
+                            // used to be.
+                            if model.showsInlineMultiview { MultiviewPane(generator: 1) }
                             ConsoleView()
                         }
                         .padding(12)

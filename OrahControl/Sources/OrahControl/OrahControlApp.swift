@@ -87,12 +87,15 @@ struct OrahControlApp: App {
                 Button("Rig Check") { model.setRigCheck(!model.showsRigCheck) }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                 Divider()
-                Button("Multiview 1") { openWindow(id: Self.multiviewWindow, value: 1) }
-                    .keyboardShortcut("1", modifiers: [.command, .shift])
-                Button("Multiview 2") { openWindow(id: Self.multiviewWindow, value: 2) }
-                    .keyboardShortcut("2", modifiers: [.command, .shift])
+                ForEach(1...AppModel.multiviewCount, id: \.self) { number in
+                    Button("Multiview \(number)") {
+                        openWindow(id: Self.multiviewWindow, value: number)
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(number)")),
+                                      modifiers: [.command, .shift])
+                }
                 Button("Console") { openWindow(id: Self.consoleWindow) }
-                    .keyboardShortcut("3", modifiers: [.command, .shift])
+                    .keyboardShortcut("0", modifiers: [.command, .shift])
             }
         }
 
@@ -123,6 +126,10 @@ struct OrahControlApp: App {
         WindowGroup("Multiview", id: Self.multiviewWindow, for: Int.self) { $number in
             DetachedPane { MultiviewPane(generator: number ?? 1, showsUndock: false) }
                 .environment(model)
+                // The main window closes the gap where this pane used to be,
+                // and opens it again when the window goes away.
+                .onAppear { model.multiviewDetached(number ?? 1, true) }
+                .onDisappear { model.multiviewDetached(number ?? 1, false) }
         }
         .defaultSize(width: 1500, height: 950)
 

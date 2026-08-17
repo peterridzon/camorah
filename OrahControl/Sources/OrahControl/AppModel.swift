@@ -1493,11 +1493,34 @@ final class AppModel {
         }
     }
 
+    /// How many multiview generators there are.
+    ///
+    /// Four, because a gallery on a big show has more than one wall and they
+    /// are never wanted the same way round — boxes in front of the operator,
+    /// the full rig behind, a quad for the director, one for whoever is
+    /// watching audio. The first is also the one embedded in the main window.
+    static let multiviewCount = 4
+
     private(set) var multiviewLayout: [Int: String] = [:]
 
     func layout(for generator: Int) -> MultiviewLayout {
-        MultiviewLayout.named(multiviewLayout[generator] ?? (generator == 1 ? "big4top" : "wall24"))
+        MultiviewLayout.named(multiviewLayout[generator]
+                              ?? (generator == 1 ? "big4top" : "wall24"))
     }
+
+    /// Generators currently open as windows of their own.
+    ///
+    /// The first one also lives in the main window, so this is what tells the
+    /// desk to close that space up: once the wall is on its own screen, the
+    /// main window has no reason to keep a hole where it used to be.
+    private(set) var detachedMultiviews: Set<Int> = []
+
+    func multiviewDetached(_ generator: Int, _ detached: Bool) {
+        if detached { detachedMultiviews.insert(generator) }
+        else { detachedMultiviews.remove(generator) }
+    }
+
+    var showsInlineMultiview: Bool { !detachedMultiviews.contains(1) }
 
     func setLayout(_ layout: MultiviewLayout, for generator: Int) {
         multiviewLayout[generator] = layout.id
@@ -1505,7 +1528,10 @@ final class AppModel {
     }
 
     /// Where each generator's picture goes, for the label on its tab.
-    func output(for generator: Int) -> String { "Window · display \(generator + 1)" }
+    func output(for generator: Int) -> String {
+        generator == 1 && showsInlineMultiview ? "in the desk window"
+                                               : "Window · display \(generator + 1)"
+    }
 
     // MARK: - Saved layouts
 
@@ -1534,14 +1560,17 @@ final class AppModel {
     /// Whether the two free boxes are switched on. Preview and program are
     /// bound to the desk and cannot be turned off — they are the two the
     /// operator is judging.
-    private(set) var boxEnabled: [Int: Bool] = [3: true, 4: true]
+    private(set) var boxEnabled: [String: Bool] = [:]
 
-    func toggleBox(_ number: Int) {
+    func toggleBox(_ number: Int, generator: Int) {
         guard number >= 3 else { return }
-        boxEnabled[number] = !(boxEnabled[number] ?? true)
+        let key = "\(generator)-\(number)"
+        boxEnabled[key] = !(boxEnabled[key] ?? true)
     }
 
-    func isBoxOn(_ number: Int) -> Bool { number < 3 || (boxEnabled[number] ?? true) }
+    func isBoxOn(_ number: Int, generator: Int) -> Bool {
+        number < 3 || (boxEnabled["\(generator)-\(number)"] ?? true)
+    }
 
     // MARK: - Which lens a source tile shows
 

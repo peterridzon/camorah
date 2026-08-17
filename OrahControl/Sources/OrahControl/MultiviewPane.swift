@@ -45,7 +45,7 @@ struct MultiviewPane: View {
 
     private var tabs: some View {
         HStack(spacing: 8) {
-            ForEach(1...2, id: \.self) { number in
+            ForEach(1...AppModel.multiviewCount, id: \.self) { number in
                 generatorTab(number)
             }
             Spacer()
@@ -68,6 +68,13 @@ struct MultiviewPane: View {
                 .font(.system(size: 12, weight: .bold, design: .monospaced)).tracking(1.4)
             Text("\(model.output(for: number)) · \(model.layout(for: number).title)")
                 .font(Theme.value(11)).foregroundStyle(Theme.dim)
+            if model.detachedMultiviews.contains(number) {
+                Text("OPEN").font(Theme.label(8)).tracking(1)
+                    .foregroundStyle(Color(hex: 0x141417))
+                    .padding(.horizontal, 5).padding(.vertical, 2)
+                    .background(Theme.amber)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+            }
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(RoundedRectangle(cornerRadius: 9)
@@ -75,6 +82,9 @@ struct MultiviewPane: View {
         .overlay { RoundedRectangle(cornerRadius: 9)
             .stroke(selected ? Theme.amber : Theme.line, lineWidth: 1) }
         .contentShape(Rectangle())
+        // The tab stays whether the generator is in a window or not — it is how
+        // you call it back. Tapping one that is already open brings that window
+        // forward rather than making a second copy of it.
         .onTapGesture { openWindow(id: OrahControlApp.multiviewWindow, value: number) }
     }
 
@@ -112,8 +122,8 @@ struct MultiviewPane: View {
         HStack(spacing: 6) {
             if layout.boxes >= 1 { bigBox(role: .preview) }
             if layout.boxes >= 2 { bigBox(role: .program) }
-            if layout.boxes >= 3 && model.isBoxOn(3) { quadBox(0, number: 3) }
-            if layout.boxes >= 4 && model.isBoxOn(4) { quadBox(1, number: 4) }
+            if layout.boxes >= 3 && model.isBoxOn(3, generator: generator) { quadBox(0, number: 3) }
+            if layout.boxes >= 4 && model.isBoxOn(4, generator: generator) { quadBox(1, number: 4) }
         }
     }
 
@@ -324,7 +334,7 @@ struct MultiviewPane: View {
     private func boxRowEntry(_ number: Int, key: String, tint: Color,
                              text: String) -> some View {
         let locked = number < 3
-        let on = model.isBoxOn(number)
+        let on = model.isBoxOn(number, generator: generator)
 
         return HStack(spacing: 9) {
             Text(key)
@@ -342,7 +352,7 @@ struct MultiviewPane: View {
                         .frame(width: 13, height: 13).padding(2.5)
                 }
                 .opacity(locked ? 0.45 : 1)
-                .onTapGesture { model.toggleBox(number) }
+                .onTapGesture { model.toggleBox(number, generator: generator) }
         }
         .padding(.horizontal, 9).padding(.vertical, 7)
         .background(RoundedRectangle(cornerRadius: 6).fill(Theme.panel))
