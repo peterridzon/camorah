@@ -365,7 +365,11 @@ private struct Ladder: View {
     var body: some View {
         VStack(spacing: 2) {
             ForEach(0..<count, id: \.self) { index in
-                let position = Double(count - 1 - index) / Double(count - 1)
+                // Measured from the top, because that is where the handle
+                // starts and which way it travels. Filling from the bottom made
+                // the column grow upwards while the hand pulled down — two
+                // readings of the same number, pointing opposite ways.
+                let position = Double(index) / Double(count - 1)
                 let lit = position < level
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(lit ? Color(hue: 0.094, saturation: 0.92,
