@@ -41,15 +41,18 @@ enum Theme {
     static let amberGlow = Color(hex: 0xFFC766)
     static let keyBody   = Color(hex: 0x26221A)
 
-    /// The unlit key. Dark body, so the amber frame and the lamp carry the
-    /// meaning rather than the fill.
-    static let keyGradient = LinearGradient(
-        colors: [Color(hex: 0x26221A), Color(hex: 0x1B1813), Color(hex: 0x221E17)],
-        startPoint: .top, endPoint: .bottom)
+    /// The unlit key. One flat dark tone, so the amber frame and the lamp
+    /// carry the meaning rather than the fill.
+    static let keyFill = Color(hex: 0x1F1B14)
 
-    static let amberGradient = LinearGradient(
-        colors: [Color(hex: 0xFFE0A6), amberGlow, Color(hex: 0xC9832A), amber],
-        startPoint: .top, endPoint: .bottom)
+    /// Flat, not moulded.
+    ///
+    /// The keys were lit with a four-stop vertical gradient — a plastic cap
+    /// with a highlight down it. It looked like hardware, which was the point,
+    /// but next to everything else on this screen it reads as decoration from a
+    /// different decade. A single colour says "this one is on" just as loudly
+    /// and stops competing with the picture.
+    static let amberFill = amber
 
     /// The ring on a colour wheel. Starts and ends on the same red so the wheel
     /// closes without a seam.

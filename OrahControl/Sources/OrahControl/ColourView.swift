@@ -228,9 +228,9 @@ struct ColourView: View {
                 ZStack(alignment: .top) {
                     RoundedRectangle(cornerRadius: 8).fill(.black)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.line, lineWidth: 1))
-                    Capsule().fill(Theme.amberGradient)
+                    Capsule().fill(Theme.amberFill)
                         .frame(height: knob)
-                        .shadow(color: Theme.amber.opacity(0.45), radius: 8)
+                        .shadow(color: Theme.amber.opacity(0.22), radius: 4)
                         .offset(y: y)
                 }
                 .contentShape(Rectangle())
@@ -265,9 +265,9 @@ struct ColourView: View {
                 }
                 .stroke(Theme.line, lineWidth: 1)
 
-                Circle().fill(Theme.amberGradient)
+                Circle().fill(Theme.amberFill)
                     .frame(width: 32, height: 32)
-                    .shadow(color: Theme.amber.opacity(0.5), radius: 10)
+                    .shadow(color: Theme.amber.opacity(0.25), radius: 5)
                     .position(x: x, y: y)
             }
             .contentShape(Rectangle())

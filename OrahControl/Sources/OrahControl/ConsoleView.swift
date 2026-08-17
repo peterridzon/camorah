@@ -119,14 +119,14 @@ private struct KeyCap: View {
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 9)
-                    .fill(isLit ? litBody : Theme.keyGradient)
+                    .fill(isLit ? litBody : Theme.keyFill)
                     .overlay {
                         RoundedRectangle(cornerRadius: 9)
                             .stroke(camera == nil ? Theme.dead
                                     : isLit ? accent.opacity(0.95) : Theme.amber,
                                     lineWidth: 1.5)
                     }
-                    .shadow(color: isLit ? accent.opacity(0.55) : .clear, radius: 11)
+                    .shadow(color: isLit ? accent.opacity(0.32) : .clear, radius: 6)
 
                 if camera != nil {
                     // The lamp. Read peripherally, without looking at the text.
@@ -134,8 +134,8 @@ private struct KeyCap: View {
                         .fill(isLit ? Color.white : Theme.amber)
                         .frame(height: 3)
                         .padding(.horizontal, 13)
-                        .shadow(color: isLit ? .white.opacity(0.9) : Theme.amber.opacity(0.85),
-                                radius: 5)
+                        .shadow(color: isLit ? .white.opacity(0.5) : Theme.amber.opacity(0.45),
+                                radius: 3)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(.top, 5)
                 }
@@ -157,7 +157,7 @@ private struct KeyCap: View {
                     Circle()
                         .fill(isLit ? Color.white.opacity(0.9) : Theme.amber)
                         .frame(width: 5, height: 5)
-                        .shadow(color: Theme.amber, radius: 4)
+                        .shadow(color: Theme.amber.opacity(0.5), radius: 2)
                         .frame(maxWidth: .infinity, maxHeight: .infinity,
                                alignment: .bottomTrailing)
                         .padding(5)
@@ -170,13 +170,7 @@ private struct KeyCap: View {
         .help(camera.map { "\($0.name) · CAM \(String(format: "%02d", $0.slot))" } ?? "")
     }
 
-    private var litBody: LinearGradient {
-        isProgramBus
-            ? LinearGradient(colors: [Color(hex: 0xFF6B70), Theme.program, Color(hex: 0xA8121A)],
-                             startPoint: .top, endPoint: .bottom)
-            : LinearGradient(colors: [Color(hex: 0x7BF3AB), Theme.preview, Color(hex: 0x14853F)],
-                             startPoint: .top, endPoint: .bottom)
-    }
+    private var litBody: Color { isProgramBus ? Theme.program : Theme.preview }
 }
 
 // MARK: - Transition
@@ -243,10 +237,10 @@ private struct TransitionBlock: View {
                 .frame(maxWidth: .infinity).frame(height: 44)
                 .foregroundStyle(selected ? Color(hex: 0x141417) : Theme.amberGlow)
                 .background(RoundedRectangle(cornerRadius: 9)
-                    .fill(selected ? Theme.amberGradient : Theme.keyGradient))
+                    .fill(selected ? Theme.amberFill : Theme.keyFill))
                 .overlay { RoundedRectangle(cornerRadius: 9)
                     .stroke(selected ? Theme.amberGlow : Theme.amber.opacity(0.55), lineWidth: 1.5) }
-                .shadow(color: selected ? Theme.amber.opacity(0.5) : .clear, radius: 10)
+                .shadow(color: selected ? Theme.amber.opacity(0.28) : .clear, radius: 5)
         }
         .buttonStyle(.plain)
     }
@@ -268,7 +262,7 @@ private struct TransitionBlock: View {
                 .font(.system(size: 13, weight: .bold)).tracking(1.6)
                 .frame(maxWidth: .infinity).frame(height: 66)
                 .foregroundStyle(Theme.amberGlow)
-                .background(RoundedRectangle(cornerRadius: 9).fill(Theme.keyGradient))
+                .background(RoundedRectangle(cornerRadius: 9).fill(Theme.keyFill))
                 .overlay { RoundedRectangle(cornerRadius: 9).stroke(Theme.amber, lineWidth: 1.5) }
         }
         .buttonStyle(.plain)
@@ -282,7 +276,7 @@ private struct TransitionBlock: View {
                 .frame(maxWidth: .infinity).frame(height: 44)
                 .foregroundStyle(armed ? .white : Theme.amberGlow.opacity(0.75))
                 .background(RoundedRectangle(cornerRadius: 9)
-                    .fill(armed ? AnyShapeStyle(Theme.program) : AnyShapeStyle(Theme.keyGradient)))
+                    .fill(armed ? AnyShapeStyle(Theme.program) : AnyShapeStyle(Theme.keyFill)))
                 .overlay { RoundedRectangle(cornerRadius: 9)
                     .stroke(armed ? Theme.program : Theme.amber.opacity(0.55), lineWidth: 1.5) }
         }
@@ -311,15 +305,15 @@ private struct RateSlider: View {
 
             ZStack(alignment: .leading) {
                 Capsule().fill(Color(hex: 0x2E2E2C)).frame(height: 5)
-                Capsule().fill(Theme.amberGradient)
+                Capsule().fill(Theme.amberFill)
                     .frame(width: max(5, CGFloat(fraction) * travel + knob / 2), height: 5)
 
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Theme.amberGradient)
+                    .fill(Theme.amberFill)
                     .frame(width: knob, height: 20)
                     .overlay { RoundedRectangle(cornerRadius: 4)
                         .stroke(Color(hex: 0x6B4415), lineWidth: 1) }
-                    .shadow(color: Theme.amber.opacity(0.5), radius: 6)
+                    .shadow(color: Theme.amber.opacity(0.25), radius: 3)
                     .offset(x: CGFloat(fraction) * travel)
             }
             .frame(height: 22)
@@ -379,15 +373,14 @@ private struct TBarColumn: View {
                 // found without looking.
                 VStack(spacing: 0) {
                     RoundedRectangle(cornerRadius: 7)
-                        .fill(Theme.amberGradient)
+                        .fill(Theme.amberFill)
                         .frame(height: 26)
                         .overlay { RoundedRectangle(cornerRadius: 7)
                             .stroke(Color(hex: 0x6B4415), lineWidth: 1) }
-                        .shadow(color: Theme.amber.opacity(0.45), radius: 9)
+                        .shadow(color: Theme.amber.opacity(0.25), radius: 5)
                         .padding(.horizontal, -14)
                     UnevenRoundedRectangle(bottomLeadingRadius: 6, bottomTrailingRadius: 6)
-                        .fill(LinearGradient(colors: [Color(hex: 0xC9832A), Color(hex: 0x5C3A0C)],
-                                             startPoint: .top, endPoint: .bottom))
+                        .fill(Color(hex: 0xC9832A))
                         .frame(width: 26, height: 26)
                 }
                 .offset(y: CGFloat(model.tbarPosition) * travel)
@@ -539,7 +532,7 @@ private struct AssignSheet: View {
                 .padding(.horizontal, 11).padding(.vertical, 5)
                 .foregroundStyle(on ? Color(hex: 0x141417) : Theme.dim)
                 .background(RoundedRectangle(cornerRadius: 5)
-                    .fill(on ? AnyShapeStyle(Theme.amberGradient)
+                    .fill(on ? AnyShapeStyle(Theme.amberFill)
                              : AnyShapeStyle(Color(hex: 0x232327))))
         }
         .buttonStyle(.plain)

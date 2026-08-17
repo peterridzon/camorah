@@ -156,7 +156,7 @@ struct DetachedPane<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        ScrollView {
+        ScrollView([.vertical, .horizontal]) {
             content().padding(12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

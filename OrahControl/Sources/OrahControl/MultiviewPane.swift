@@ -32,8 +32,9 @@ struct MultiviewPane: View {
             paneChips
             HStack(alignment: .top, spacing: 10) {
                 screen
-                rail.frame(width: 336)
+                rail.frame(width: 336).fixedSize(horizontal: true, vertical: false)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(11)
         .background(Theme.panel)
@@ -49,7 +50,7 @@ struct MultiviewPane: View {
                 .padding(.horizontal, 11).padding(.vertical, 6)
                 .foregroundStyle(on ? Color(hex: 0x141417) : Theme.dim)
                 .background(RoundedRectangle(cornerRadius: 7)
-                    .fill(on ? AnyShapeStyle(Theme.amberGradient)
+                    .fill(on ? AnyShapeStyle(Theme.amberFill)
                              : AnyShapeStyle(Color(hex: 0x232327))))
                 .overlay { RoundedRectangle(cornerRadius: 7)
                     .stroke(on ? Theme.amberGlow : Theme.line, lineWidth: 1) }
@@ -516,7 +517,7 @@ private struct SourceTile: View {
                 .foregroundStyle(running ? Theme.program : Color(hex: 0x141417))
                 .background(RoundedRectangle(cornerRadius: 3)
                     .fill(running ? AnyShapeStyle(Color.black.opacity(0.8))
-                                  : AnyShapeStyle(Theme.amberGradient)))
+                                  : AnyShapeStyle(Theme.amberFill)))
                 .overlay {
                     RoundedRectangle(cornerRadius: 3)
                         .stroke(running ? Theme.program.opacity(0.8) : Theme.amberGlow,
@@ -544,7 +545,7 @@ private struct SourceTile: View {
                 .foregroundStyle(shown ? Color(hex: 0x141417)
                                  : arrived ? Theme.amberGlow : Color(hex: 0x6B4D18))
                 .background(RoundedRectangle(cornerRadius: 3)
-                    .fill(shown ? AnyShapeStyle(Theme.amberGradient)
+                    .fill(shown ? AnyShapeStyle(Theme.amberFill)
                           : AnyShapeStyle(Color.black.opacity(0.86))))
                 .overlay {
                     RoundedRectangle(cornerRadius: 3)

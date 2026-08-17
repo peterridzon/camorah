@@ -24,8 +24,10 @@ struct ContentView: View {
                 // available, then what puts it to air. The rail keeps the parts
                 // of setup that a show still needs at hand.
                 HStack(spacing: 0) {
-                    ScrollView {
-                        VStack(spacing: 12) {
+                    // Both axes: the desk is wider than some windows, and
+                    // clipping the left of it is worse than a scrollbar.
+                    ScrollView([.vertical, .horizontal]) {
+                        VStack(alignment: .leading, spacing: 12) {
                             // The strip stays whatever happens to the panes —
                             // it is how a generator on another screen is called
                             // back, and it cannot live inside the thing it

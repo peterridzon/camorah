@@ -41,14 +41,14 @@ struct StripButton: View {
             .frame(height: 34)
             .background {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(selected ? AnyShapeStyle(Theme.amberGradient)
+                    .fill(selected ? AnyShapeStyle(Theme.amberFill)
                                    : AnyShapeStyle(Theme.raised))
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(selected ? Theme.amberGlow : Theme.line, lineWidth: 1)
             }
-            .shadow(color: selected ? Theme.amber.opacity(0.35) : .clear, radius: 8)
+            .shadow(color: selected ? Theme.amber.opacity(0.22) : .clear, radius: 4)
         }
         .buttonStyle(.plain)
     }
@@ -60,9 +60,16 @@ struct Strip<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        HStack(spacing: 7) {
-            content()
-            Spacer(minLength: 0)
+        // Scrolls rather than overflows. An HStack wider than its window gets
+        // centred by SwiftUI, which pushes the first item off the left edge —
+        // and the first item is the one you look at. Anchored left, and if
+        // there is more than fits, it slides.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 7) {
+                content()
+            }
+            .padding(.trailing, 2)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
