@@ -1,0 +1,514 @@
+<meta charset="utf-8">
+<link rel="icon" href="favicon.svg" type="image/svg+xml"><title>Signal Flow</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#0a0a0b; --panel:#141416; --line:#26262a;
+    --fg:#f2f2f3; --dim:#95959c; --faint:#5c5c64;
+    --amber:#e8a33d; --amberGlow:#ffc766; --ctrl:#FED040; --rec:#e0202a; --fib:#4fc3d9;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1460px;margin:0 auto;padding:clamp(20px,3vw,44px)}
+  h1{margin:0;font:700 clamp(21px,2.5vw,30px)/1.15 -apple-system,sans-serif;letter-spacing:-.022em}
+  .sub{margin:.4em 0 clamp(20px,3vw,34px);color:var(--faint);font-size:14px}
+  .board{background:var(--panel);border:1px solid var(--line);border-radius:20px;
+         padding:clamp(12px,1.8vw,26px)}
+  svg.map{display:block;width:100%;height:auto}
+
+  /* ── one drawing language ────────────────────────────────────────────────
+     Every device is built from the same block: the same 3/4 angle, the same
+     corner radius, the same two stroke weights. The silhouette is heavy, the
+     detail inside is light, and nothing is filled. Consistency is what makes a
+     set of icons read as a set rather than as six drawings. */
+  .dev{cursor:pointer}
+  /* Hit area and hover ring.
+     Without these the only thing you can point at is a 1.4-pixel stroke — the
+     middle of every device was a hole, so the drawing looked dead even though
+     all of it was live. The rect is invisible and carries the pointer; the ring
+     is the promise that something will happen. */
+  .hit{fill:transparent}
+  .ring{fill:none;stroke:var(--amber);stroke-width:1.2;opacity:0;
+        transition:opacity .18s, stroke-width .18s}
+  .dev:hover .ring{opacity:.42;stroke-dasharray:none}
+  .dev.sel .ring{opacity:.6;stroke:var(--amberGlow)}
+  .dev.red:hover .ring,.dev.red.sel .ring{stroke:var(--rec)}
+  .dev .art{transition:transform .18s cubic-bezier(.2,.7,.3,1)}
+  .dev:hover .art{transform:translateY(-3px)}
+  .tip{opacity:0;transition:opacity .18s;pointer-events:none}
+  .dev:hover .tip{opacity:1}
+  .tip rect{fill:#221d13;stroke:var(--amber);stroke-width:1}
+  .tip text{fill:var(--amberGlow);font:600 10.5px var(--mono);letter-spacing:.1em;
+            text-anchor:middle}
+  /* One pass around the drawing when the page opens, so the interactivity is
+     discovered rather than explained. It runs once and never again. */
+  @keyframes wake{0%{opacity:0}35%{opacity:.55}100%{opacity:0}}
+  .dev.wake .ring{animation:wake 1.5s ease-in-out both}
+  .face{fill:#17171a;stroke:var(--amber);stroke-width:1.4;stroke-linejoin:round;
+        shape-rendering:geometricPrecision;transition:fill .16s,stroke .16s}
+  .face.top{fill:#1d1a14} .face.side{fill:#101012}
+  .ink{fill:none;stroke:var(--amber);stroke-width:.85;stroke-linecap:round;
+       stroke-linejoin:round;opacity:.62;shape-rendering:geometricPrecision;
+       transition:stroke .16s}
+  .ink.b{stroke-width:1.4;opacity:.95}
+  .dot{fill:var(--amber);opacity:.62;transition:fill .16s}
+  .lbl{fill:var(--fg);font:600 15px -apple-system,sans-serif;letter-spacing:-.012em}
+  .cap{fill:var(--faint);font:500 11.5px var(--mono)}
+  .mark{fill:var(--amber);font:600 9px var(--mono);letter-spacing:.24em;text-anchor:middle;
+        opacity:.6}
+  .dev:hover .face{fill:#1c1810} .dev:hover .face.top{fill:#221d13}
+  .dev.sel .face{stroke:var(--amberGlow);fill:#241d10}
+  .dev.sel .face.top{fill:#2c2413} .dev.sel .face.side{fill:#1a1509}
+  .dev.sel .ink{stroke:var(--amberGlow);opacity:.85}
+  .dev.sel .dot{fill:var(--amberGlow);opacity:1}
+  .dev.sel .lbl{fill:var(--amberGlow)}
+  .dev.sel g.art{filter:drop-shadow(0 0 18px rgba(232,163,61,.35))}
+
+  .dev.red .face,.dev.red .ink{stroke:var(--rec)} .dev.red .dot{fill:var(--rec)}
+  .dev.red.sel .face{stroke:#ff8a8f;fill:#231012}
+  .dev.red.sel .ink{stroke:#ff8a8f} .dev.red.sel .lbl{fill:#ffb0b4}
+  .dev.red.sel g.art{filter:drop-shadow(0 0 18px rgba(224,32,42,.4))}
+
+  .wire{fill:none;stroke:#33333b;stroke-width:1.5;stroke-linecap:round;transition:stroke .16s}
+  .wire.on{stroke:var(--amber);stroke-width:2.2;filter:drop-shadow(0 0 6px rgba(232,163,61,.5))}
+  .wire.fib{stroke:var(--fib);opacity:.85}
+  .wire.rec{stroke:var(--rec);opacity:.8}
+  .wire.ctrl{stroke:var(--ctrl);stroke-dasharray:7 7;stroke-width:1.2;opacity:.75}
+  .wlabel{fill:var(--faint);font:600 10px var(--mono);letter-spacing:.14em}
+  .wlabel.fib{fill:var(--fib)} .wlabel.ctrl{fill:var(--ctrl)} .wlabel.rec{fill:#9a4a4e}
+
+  .detail{margin-top:22px;background:var(--panel);border:1px solid var(--line);
+          border-radius:18px;padding:clamp(18px,2.2vw,30px);min-height:200px}
+  .detail h2{margin:0 0 .35em;font:700 clamp(19px,2.1vw,26px)/1.2 -apple-system,sans-serif;
+       letter-spacing:-.022em}
+  .kick{font:600 10px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;
+        color:var(--amber);display:block;margin-bottom:11px}
+  .detail p{margin:0;color:var(--dim);max-width:74ch;font-size:15px;line-height:1.65}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:18px}
+  .chip{background:#1a1a1e;border:1px solid #2e2e34;color:var(--dim);border-radius:999px;
+        padding:7px 14px;font-size:12.5px;cursor:pointer;transition:all .12s}
+  .chip:hover{color:var(--fg);border-color:#45454e}
+  .chip.sel{background:linear-gradient(178deg,#ffd88a,var(--amber));color:#141417;
+       border-color:#ffd88a;font-weight:600}
+  .facts{display:flex;gap:26px;flex-wrap:wrap;margin-top:20px;padding-top:17px;
+         border-top:1px solid var(--line)}
+  .fact b{display:block;font:700 20px/1 var(--mono);color:var(--amber);letter-spacing:-.02em}
+  .fact span{display:block;font-size:11.5px;color:var(--faint);margin-top:5px}
+  .legend{margin-top:18px;display:flex;gap:20px;flex-wrap:wrap;font-size:11.5px;color:var(--faint)}
+  .legend i{display:inline-block;width:16px;height:3px;border-radius:2px;margin-right:8px;
+            vertical-align:middle}
+</style>
+
+<div class="wrap">
+  <h1>How a show gets out.</h1>
+  <p class="sub">Twenty-four cameras in, one 4K sphere out — <span style="color:var(--amber)">tap any device</span> for what it does.</p>
+  <div class="board"><svg class="map" viewBox="0 0 1440 680" id="map"></svg></div>
+  <div class="detail" id="detail"></div>
+  <div class="legend">
+    <span><i style="background:var(--amber)"></i>media</span>
+    <span><i style="background:var(--fib)"></i>fibre to the gallery</span>
+    <span><i style="background:var(--ctrl)"></i>control, upstream</span>
+    <span><i style="background:var(--rec)"></i>recording — never touched by the desk</span>
+  </div>
+</div>
+
+<script>
+/* ── the block ───────────────────────────────────────────────────────────────
+   Every box in this drawing is the same solid seen from the same place: a
+   little above, a little to the left. D is that offset, and because one number
+   governs all of them the icons sit in one world instead of six.            */
+const D = 20, DY = 11, R = 9;
+
+function block(w,h,d=D,dy=DY,r=R){
+  const D=d, DY=dy;
+  return `
+   <path class="face side" d="M${w} ${r} L${w+D} ${r-DY} V${h-DY-r}
+        q0 ${r} -${r} ${r} L${w} ${h}Z"/>
+   <path class="face top"  d="M${r} 0 L${r+D} -${DY} H${w+D-r} q${r} 0 ${r} ${r}
+        L${w} ${r} q0 -${r} -${r} -${r}Z"/>
+   <rect class="face" x="0" y="0" width="${w}" height="${h}" rx="${r}"/>`;
+}
+const port  = (x,y,w=15,h=11) => `<rect class="ink b" x="${x}" y="${y}" width="${w}"
+     height="${h}" rx="3"/>`;
+const led   = (x,y,o=1) => `<circle class="dot" cx="${x}" cy="${y}" r="3.2"
+     opacity="${0.62*o}"/>`;
+const vents = (x,y,w,n=4,g=9) => Array.from({length:n},(_,i)=>
+     `<path class="ink" d="M${x} ${y+i*g} H${x+w}"/>`).join("");
+
+/* ── the devices ─────────────────────────────────────────────────────────────
+   Each is the block plus at most five marks. The restraint is the point: a
+   handful of lines at this size reads instantly, and a faithful one does not. */
+const ART = {
+  /* The 4i is a wedge, not a box: a wide face and a narrower one angled away,
+     a lens on each, standing on a small plinth. Same viewing angle as the rest. */
+  orah: () => `
+    <path class="face" d="M-19 34 h38 q7 0 7 7 v19 q0 7 -7 7 h-38 q-7 0 -7 -7 v-19 q0 -7 7 -7Z"/>
+    <text class="mark" x="0" y="56">ORAH</text>
+    <path class="face side" d="M10 -43 q0 -8 8 -6 L48 -38 q8 3 8 11 V8 q0 8 -8 11
+         L18 28 q-8 2 -8 -6Z"/>
+    <path class="face" d="M-56 -30 q-2 -8 6 -10 L2 -50 q8 -1 8 7 V22 q0 8 -8 7
+         L-50 22 q-8 -1 -6 -9Z"/>
+    <circle class="ink b" cx="-24" cy="-9" r="22"/>
+    <circle class="ink" cx="-24" cy="-9" r="14"/>
+    <circle class="dot" cx="-24" cy="-9" r="6"/>
+    <ellipse class="ink b" cx="33" cy="-9" rx="12" ry="19"/>
+    <ellipse class="ink" cx="33" cy="-9" rx="7" ry="12"/>`,
+
+  /* A 1U switch is mostly ports. Drawing twelve of them at the real pitch is
+     what makes it read as a switch rather than as a box with dots on it. */
+  switchbox: () => block(196,44) + `
+    <path class="ink" d="M0 9 H-7 V35 H0 M196 9 H203 V35 H196"/>
+    <rect class="ink" x="12" y="12" width="20" height="20" rx="2.5"/>
+    ${led(17,17)} ${led(17,27,.45)}
+    ${Array.from({length:12},(_,i)=>port(44+i*12.4,13,9,8)).join("")}
+    ${Array.from({length:12},(_,i)=>port(44+i*12.4,25,9,8)).join("")}
+    <rect class="ink" x="178" y="15" width="12" height="16" rx="2"/>`,
+
+  /* HP mini: a small flat box, four of them stacked the way they actually sit
+     in the van — one per group of cameras, on top of each other, not in a rack. */
+  node: () => Array.from({length:4},(_,i)=>`
+    <g transform="translate(0,${i*36})">
+      ${block(122,30,14,8,5)}
+      <circle class="ink b" cx="14" cy="15" r="5"/>
+      <path class="ink" d="M32 10 V20 M38 10 V20 M44 10 V20" opacity=".4"/>
+      ${port(58,11,11,8)} ${port(74,11,11,8)}
+      <rect class="ink" x="94" y="10" width="18" height="10" rx="2"/>
+      ${led(105,24, i===0 ? 1 : .35)}
+    </g>`).join(""),
+
+  /* Mac Studio is 19.7 cm across and 9.5 high — a low slab, not a tower.
+     Getting that ratio right is most of what makes it recognisable. */
+  mac: () => block(132,62) + `
+    <path class="ink" d="M0 44 H132" opacity=".45"/>
+    ${port(12,50,14,7)} ${port(31,50,14,7)}
+    <circle class="dot" cx="58" cy="53.5" r="3.2"/>
+    ${port(70,50,12,7)} ${port(87,50,12,7)}
+    <circle class="ink" cx="112" cy="53.5" r="4"/>
+    <text class="lbl" x="66" y="30" text-anchor="middle"
+          style="font-size:15px;letter-spacing:.1em">M5</text>`,
+
+  /* A 2U rack chassis: ears, handles, a bank of drive bays. */
+  vahana: () => block(200,72) + `
+    <path class="ink b" d="M0 8 H-9 V64 H0 M200 8 H209 V64 H200"/>
+    <circle class="ink" cx="-4.5" cy="20" r="2.4"/><circle class="ink" cx="-4.5" cy="52" r="2.4"/>
+    <circle class="ink" cx="204.5" cy="20" r="2.4"/><circle class="ink" cx="204.5" cy="52" r="2.4"/>
+    <path class="ink b" d="M10 22 q-6 0 -6 6 v16 q0 6 6 6 M190 22 q6 0 6 6 v16 q0 6 -6 6"/>
+    ${Array.from({length:6},(_,i)=>
+      `<rect class="ink" x="${24+i*26}" y="14" width="22" height="44" rx="2"/>`).join("")}
+    ${Array.from({length:6},(_,i)=>
+      `<path class="ink" d="M${29+i*26} 22 V50" opacity=".35"/>`).join("")}
+    ${led(184,60)} ${led(172,60,.4)}`,
+
+  /* The 360° programme is not for a rectangle. The headset is drawn last on
+     purpose — it is the only thing here the audience actually holds. */
+  vision: () => `
+    <path class="face" d="M14 6 Q68 -6 122 6 Q136 9 136 24 V42 Q136 58 120 62
+         Q94 68 68 56 Q42 68 16 62 Q0 58 0 42 V24 Q0 9 14 6Z"/>
+    <path class="ink" d="M12 16 Q68 6 124 16 Q130 18 130 27 V40 Q130 50 118 53
+         Q92 59 68 48 Q44 59 18 53 Q6 50 6 40 V27 Q6 18 12 16Z"/>
+    <path class="ink" d="M68 48 V60" opacity=".4"/>
+    <path class="ink b" d="M136 20 Q158 24 158 40 M0 20 Q-22 24 -22 40"/>
+    <path class="ink" d="M158 40 Q158 52 146 56 M-22 40 Q-22 52 -10 56" opacity=".45"/>`,
+
+  /* A display is the same solid, only thin — and its face is the one thing in
+     the drawing allowed to carry a picture. */
+  /* A vision-mixer panel, not a screen: a shallow wedge you look down onto,
+     two rows of illuminated keys, and the T-bar in its slot on the right. */
+  console: () => `
+    <path class="face top" d="M6 0 L30 -16 H222 q8 0 8 8 L214 22 H14 q-8 0 -8 -8Z"/>
+    <path class="face" d="M6 14 q0 8 8 8 H214 q8 0 8 -8 V34 q0 8 -8 8 H14 q-8 0 -8 -8Z"/>
+    <g opacity=".95">
+      ${Array.from({length:12},(_,i)=>
+        `<rect class="ink b" x="${18+i*13.4}" y="-9" width="10" height="9" rx="2"/>`).join("")}
+      ${Array.from({length:12},(_,i)=>
+        `<rect class="dot" x="${13+i*13.4}" y="3" width="10" height="9" rx="2"
+           opacity="${i===2?".95":".38"}"/>`).join("")}
+    </g>
+    <rect class="ink" x="186" y="-11" width="26" height="24" rx="3" opacity=".5"/>
+    <path class="ink b" d="M199 -8 V9"/>
+    <rect class="dot" x="193" y="-3" width="12" height="5" rx="2"/>
+    ${led(16,32)} ${led(206,32,.4)}`,
+
+  /* A panel is about seven millimetres thick. Drawn with the same depth as a
+     server it stops being a monitor and becomes a box with a picture on it. */
+  wall: () => block(150,88,5,3,4) + `
+    <rect class="ink" x="6" y="6" width="138" height="70" rx="2" opacity=".3"/>
+    ${Array.from({length:7},(_,i)=>`<path class="ink" d="M${12+i*17.5} 11 V71"/>`).join("")}
+    <path class="ink" d="M12 31 H138 M12 51 H138"/>
+    <path class="ink b" d="M75 88 V104 M52 106 H98 q4 0 4 -3 H48 q0 3 4 3Z"/>`,
+
+  disks: () => `
+    <path class="face" d="M0 16 a58 16 0 0 1 116 0 v46 a58 16 0 0 1 -116 0Z"/>
+    <ellipse class="ink b" cx="58" cy="16" rx="58" ry="16" fill="#17171a"/>
+    <ellipse class="ink" cx="58" cy="40" rx="58" ry="16"/>
+    <circle class="dot" cx="58" cy="16" r="4"/>`
+};
+
+/* ── the board ───────────────────────────────────────────────────────────────
+   Positions are the top-left of each front face. One row at y≈300 carries the
+   signal; everything that leaves that row does so for a reason worth drawing. */
+const PLACED = [
+  {k:"cams",   at:[100,120], every:174, count:3, art:"orah",
+   lbl:["Orah 4i × 24","four lenses · two SoCs"], lblAt:[-72,-88]},
+  {k:"poe",    at:[286,292], art:"switchbox",
+   lbl:["PoE switch","power and data, one run"], lblAt:[0,-40]},
+  {k:"nodes",  at:[566,236], art:"node",
+   lbl:["HP mini × 4","ingest · record · proxy"], lblAt:[0,-40]},
+  {k:"iso",    at:[570,452], art:"disks",
+   lbl:["ISO on disk","exactly as sent"], lblAt:[0,116], red:true},
+
+  {k:"mview",  at:[880,86],  art:"wall", lbl:["Multiview",""], lblAt:[0,-16]},
+  {k:"mview",  at:[1042,86], art:"wall", lbl:["",""], lblAt:[0,0], dup:true},
+  {k:"mac",    at:[912,290], art:"mac",
+   lbl:["Mac Studio · M5","decode · colour · mix"], lblAt:[0,-38]},
+  {k:"console",at:[880,430], art:"console",
+   lbl:["Control panel","program · preview · T-bar"], lblAt:[0,86]},
+
+  {k:"vahana", at:[1180,282],art:"vahana",
+   lbl:["Vahana VR · 2U","stitches the 4K sphere"], lblAt:[0,-38]},
+  {k:"vision", at:[1244,470],art:"vision",
+   lbl:["The audience","Vision Pro · any headset"], lblAt:[-22,116]}
+];
+
+const WIRES = [
+  {w:"cams", d:"M170 120 H216 Q238 120 238 146 V292"},
+  {w:"cams", d:"M170 294 H238"},
+  {w:"cams", d:"M170 468 H216 Q238 468 238 442 V336"},
+  {t:["RTMP · PoE",182,286]},
+
+  {w:"poe",  d:"M502 314 H562"},
+  {t:["1 GbE",504,304]},
+
+  {w:"nodes",d:"M702 314 H752 Q772 314 772 296 V236 M772 236 H908", cls:"fib"},
+  {t:["FIBRE · 10 G",790,228,"fib"]},
+  {w:"nodes",d:"M628 344 V444", cls:"rec"},
+  {t:["ISO",640,412,"rec"]},
+
+  {w:"mac",  d:"M948 290 V182"},
+  {w:"mac",  d:"M1040 290 Q1108 290 1108 236 V182"},
+  {w:"mac",  d:"M978 352 V444"},
+  {w:"mac",  d:"M1044 318 H1176"},
+  {t:["4 × RTMP",1064,308]},
+
+  {w:"vahana", d:"M1280 354 V468"},
+  {t:["360°",1290,424]},
+
+  {w:null,   d:"M1000 500 V612 H120 V520", cls:"ctrl"},
+  {t:["CONTROL · 9989 — start, stop, gain, clock",420,604,"ctrl"]}
+];
+
+const map = document.getElementById("map");
+map.innerHTML =
+  WIRES.map(w => w.t
+    ? `<text class="wlabel ${w.t[3]||""}" x="${w.t[1]}" y="${w.t[2]}">${w.t[0]}</text>`
+    : `<path class="wire ${w.cls||""}" ${w.w?`data-w="${w.w}"`:""} d="${w.d}"/>`).join("")
+  + PLACED.map(p=>{
+      const art = ART[p.art];
+      const copies = p.count
+        ? Array.from({length:p.count},(_,i)=>
+            `<g transform="translate(0,${i*p.every})">${art()}</g>`).join("")
+        : art();
+      const [lx,ly] = p.lblAt;
+      return `<g class="dev ${p.red?"red":""}" data-k="${p.k}"
+                 transform="translate(${p.at[0]},${p.at[1]})">
+        <g class="art">${copies}</g>
+        ${p.lbl[0] ? `<text class="lbl" x="${lx}" y="${ly}">${p.lbl[0]}</text>` : ""}
+        ${p.lbl[1] ? `<text class="cap" x="${lx}" y="${ly+19}">${p.lbl[1]}</text>` : ""}
+      </g>`;
+    }).join("");
+
+/* ── the words ───────────────────────────────────────────────────────────────
+   Held once, away from the drawing. The picture stays a picture.            */
+const TEXT = {
+  cams:{kick:"On site", nm:"Orah 4i × 24",
+   d:"Each camera is really two computers on consecutive addresses, each driving two lenses "
+    +"and publishing its own stream. Twenty-four units is ninety-six streams — which is why "
+    +"nothing at full size ever crosses the van.",
+   f:[["96","streams"],["~15 Mbit/s","per lens"],["1440×1920","portrait, once rotated"]],
+   subs:[
+    {n:"Found by MAC", d:"Bonjour is multicast, and multicast from a wireless client to wired "
+      +"cameras is exactly what access points drop. An ARP sweep by Orah's own OUI finds every "
+      +"unit, announced or not — and the MAC is burned in, so a recycled DHCP lease can never "
+      +"make one camera look like another.",
+     f:[["48:65:ee","Orah OUI"],["~2 s","to notice a change"]]},
+    {n:"Four streams, named", d:"0_0, 0_1, 1_0, 1_1 — the first digit is the board, the second "
+      +"the lens. Half a camera coming up is therefore a fact you can read rather than a "
+      +"mystery to diagnose.", f:[["2 SoCs","per camera"]]},
+    {n:"Ambisonic audio", d:"Sound arrives as LPCM on 0_0 and 1_0 and is ambisonic — it turns "
+      +"with the picture instead of being nailed to the front.", f:[["ACN / SN3D",""]]}]},
+
+  poe:{kick:"On site", nm:"PoE switch",
+   d:"Power and data go down the same run to every camera, and a switch per group keeps a "
+    +"failure local: one dead switch takes six cameras, not the show. The link light is the "
+    +"first thing rig check asks about — lit but silent is a completely different fault from "
+    +"never appearing at all.",
+   f:[["4","groups of 6"],["1 cable","power and data"]], subs:[]},
+
+  nodes:{kick:"OB van", nm:"HP mini × 4",
+   d:"Four small HP minis, stacked. Each takes the streams from the six cameras it owns and "
+    +"feeds two consumers that never meet again: the recorder, and a small proxy for the desk. "
+    +"They keep doing both whether the gallery is running, restarting, or gone.",
+   f:[["6","cameras per node"],["≈0 %","CPU on the pixels"]],
+   subs:[
+    {n:"Proxy for the desk", d:"Ninety-six full streams across the van would be several "
+      +"gigabits. The node sends the gallery something small to look at, and only what is on "
+      +"air is ever handled at full size.", f:[["480p","proxy"]]},
+    {n:"Why a mini is enough", d:"The node never touches the pixels of the recording — it copies "
+      +"bytes to disk. That is what lets four office minis do the work of a video server, and "
+      +"fit in a flight case with room to spare.",
+     f:[]},
+    {n:"Says what it is doing", d:"Disk headroom, write rate, CPU and how many streams are "
+      +"actually arriving, so the desk can say a node is filling up before it does.",
+     f:[[":8000","status"]]}]},
+
+  iso:{kick:"Recording", nm:"ISO on disk",
+   d:"Every camera is recorded on its own, by stream copy: the bytes the camera sent, written "
+    +"straight to disk. No decode, no colour, no mixing. Closing the app, cutting a camera, "
+    +"changing colour mid-show or losing the Mac entirely does not interrupt a take. There is "
+    +"no setting anywhere in this application that can reach it.",
+   f:[["24","ISO files"],["0","re-encodes"],["25 min","per segment"]], subs:[]},
+
+  mac:{kick:"Gallery", nm:"Mac Studio · M5",
+   d:"The desk. Two cameras are decoded at full size — programme and preview — while the rest "
+    +"of the wall costs nothing but its proxy. Colour and the dissolve happen together in one "
+    +"Metal pass, and frames never pass through CPU memory.",
+   f:[["2","full decodes"],["0.65 ms","per frame"],["hardware","both ways"]],
+   subs:[
+    {n:"Colour, per camera", d:"The cameras do not match each other, so each carries its own "
+      +"exposure, gamma, master black and trim. None of it reaches the camera — the Orah "
+      +"protocol has no exposure control — and none of it reaches the recording.",
+     f:[["per camera","never global"]]},
+    {n:"One session per camera", d:"WebSocket on 9989, opened once and held for the show. The "
+      +"camera allows exactly one — which is why a session that is never closed cleanly locks "
+      +"the unit out until its power is pulled.", f:[["9989","control"]]},
+    {n:"Fibre to the gallery", d:"One run carries every proxy into the van and the programme "
+      +"back out. Copper would have needed a repeater at this length, and a second failure "
+      +"point at both ends of it.", f:[["10 G",""]]}]},
+
+  console:{kick:"Gallery", nm:"Control panel",
+   d:"Twelve plus twelve keys on each bus, square and aligned, with the assignment between "
+    +"button and camera done once at rig time. Program is always live; preview is what CUT, "
+    +"AUTO or the T-bar takes next. On screen today, and shaped so a real panel can drive it "
+    +"over MIDI later without the layout having to change.",
+   f:[["24","keys per bus"],["own display","undockable"]], subs:[]},
+
+  mview:{kick:"Gallery", nm:"Two multiview displays",
+   d:"Two independent generators, one per screen: the left laid out for the gallery with large "
+    +"boxes, the right carrying the full wall. Twenty-four portrait cameras tile properly at "
+    +"8×3 on a 16:9 panel and nowhere else — which is exactly why there are two of them rather "
+    +"than one crowded one.",
+   f:[["8×3","for 24 sources"],["4","boxes, two of them quad splits"]], subs:[]},
+
+  vision:{kick:"Out", nm:"The audience",
+   d:"The stitched 360° programme, in a headset. This is the only path where a mistake is "
+    +"permanent — which is the entire reason the recording downstairs is kept independent of "
+    +"it. Everything else in this drawing exists so that this picture is the one you meant.",
+   f:[["4K","full sphere"],["ambisonic","audio turns with the head"]], subs:[]},
+
+  vahana:{kick:"Stitch and out", nm:"Vahana VR",
+   d:"The four lanes of the programme camera arrive here and are stitched into a full 4K "
+    +"sphere using that unit's own calibration. Nothing upstream is written for a picture "
+    +"size, so this is where the final resolution is decided: larger sensors give a larger "
+    +"sphere, up to whatever the stitcher can carry. Vahana always pulls and never accepts a "
+    +"push, which is what lets the desk restart without it noticing.",
+   f:[["4 lanes","in"],["4K","sphere out"],["16K","ceiling by design"]], subs:[]}
+};
+
+/* Every device gets a rectangle it can be pointed at, a ring that answers the
+   pointer, and a name that appears above it. Measured from what was actually
+   drawn, so it fits whatever the art turned out to be. */
+const NS = "http://www.w3.org/2000/svg";
+const NAMES = {cams:"Orah 4i", poe:"PoE switch", nodes:"HP mini", iso:"ISO recording",
+               mac:"Mac Studio", console:"Control panel", mview:"Multiview",
+               vahana:"Vahana VR", vision:"Vision Pro"};
+
+document.querySelectorAll(".dev").forEach((g,i)=>{
+  const b = g.getBBox(), pad = 12;
+  const add = (tag, attrs, cls) => {
+    const el = document.createElementNS(NS, tag);
+    for(const k in attrs) el.setAttribute(k, attrs[k]);
+    if(cls) el.setAttribute("class", cls);
+    return el;
+  };
+  const ring = add("rect", {x:b.x-pad, y:b.y-pad, width:b.width+pad*2,
+                            height:b.height+pad*2, rx:14}, "ring");
+  const hit  = add("rect", {x:b.x-pad, y:b.y-pad, width:b.width+pad*2,
+                            height:b.height+pad*2}, "hit");
+  g.insertBefore(ring, g.firstChild);
+  g.insertBefore(hit,  g.firstChild);
+
+  const name = NAMES[g.dataset.k] || "";
+  if(name){
+    const w = name.length * 7 + 26, cx = b.x + b.width/2, cy = b.y - pad - 14;
+    const tip = add("g", {}, "tip");
+    tip.appendChild(add("rect", {x:cx-w/2, y:cy-13, width:w, height:22, rx:11}));
+    const t = add("text", {x:cx, y:cy+2});
+    t.textContent = name;
+    tip.appendChild(t);
+    g.appendChild(tip);
+  }
+
+  // Staggered so it reads as one sweep across the drawing, not nine flashes.
+  setTimeout(()=>{
+    g.classList.add("wake");
+    setTimeout(()=>g.classList.remove("wake"), 1600);
+  }, 500 + i*110);
+});
+
+let open = "cams", sub = -1;
+document.querySelectorAll(".dev").forEach(el=>{
+  el.onclick = () => { open = el.dataset.k; sub = -1; paint(); };
+});
+
+function paint(){
+  document.querySelectorAll(".dev").forEach(e=>e.classList.toggle("sel", e.dataset.k === open));
+  // Only what leaves the selected device lights up. A schematic should answer
+  // "where does this go next", not glow everywhere at once.
+  document.querySelectorAll(".wire").forEach(w=>
+    w.classList.toggle("on", w.dataset.w === open));
+
+  const src = TEXT[open], item = sub >= 0 ? src.subs[sub] : src;
+  document.getElementById("detail").innerHTML = `
+    <span class="kick">${src.kick}</span>
+    <h2>${item.n || item.nm}</h2>
+    <p>${item.d}</p>
+    ${src.subs.length ? `<div class="chips">
+      <span class="chip ${sub<0?"sel":""}" data-s="-1">Overview</span>
+      ${src.subs.map((c,j)=>`<span class="chip ${sub===j?"sel":""}" data-s="${j}">${c.n}</span>`)
+        .join("")}</div>` : ""}
+    ${(item.f && item.f.length) ? `<div class="facts">${item.f.map(([a,b])=>
+      `<div class="fact"><b>${a}</b><span>${b}</span></div>`).join("")}</div>` : ""}`;
+  document.querySelectorAll(".chip").forEach(c=>{
+    c.onclick = () => { sub = +c.dataset.s; paint(); };
+  });
+}
+paint();
+</script>
+<script>
+/* Embedded mode.
+   When this page is shown inside the site it is not a demo in a box — it is the
+   page. So its own intro, padding and background step aside, and it reports its
+   height upwards so the parent can give it exactly the room it needs. An iframe
+   with its own scrollbar is the thing that makes an embed feel like a pen. */
+(function(){
+  if(!/(\?|&)embed/.test(location.search)) return;
+  document.documentElement.style.background = "transparent";
+  document.body.style.background = "transparent";
+  const css = document.createElement("style");
+  css.textContent = `.note,h1,.sub{display:none!important}
+    .wrap{padding-left:0!important;padding-right:0!important;
+          padding-top:0!important;padding-bottom:8px!important;max-width:none!important}`;
+  document.head.appendChild(css);
+
+  const tell = () => parent.postMessage(
+    {embedHeight: Math.ceil(document.documentElement.scrollHeight), from: location.pathname},
+    "*");
+  addEventListener("load", tell);
+  addEventListener("resize", tell);
+  new MutationObserver(tell).observe(document.body, {subtree:true, childList:true, attributes:true});
+  setInterval(tell, 800);
+})();
+</script>

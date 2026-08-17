@@ -1,0 +1,40 @@
+{
+  "audioChannels" : 4,
+  "audioGainsDB" : [
+    20,
+    20,
+    20,
+    20
+  ],
+  "cameraClockUnix" : 91,
+  "cameraName" : "My 360 Camera",
+  "checkedAt" : "2026-08-16T11:08:43Z",
+  "firmware" : "1.50.23",
+  "gatewayRoundTripMilliseconds" : 6.5,
+  "hardware" : "01A",
+  "host" : "192.168.0.247",
+  "interfaces" : {
+
+  },
+  "mode" : "idle",
+  "model" : "Atlas360",
+  "notes" : [
+    "no factoryPresetsProject.ptv on the camera",
+    "record rebuilt from the check output after a later failed reach overwrote it"
+  ],
+  "number" : 24,
+  "overWiFi" : true,
+  "packetLossPercent" : 0,
+  "port" : 9989,
+  "rememberedStreamURLs" : [
+
+  ],
+  "roundTripMilliseconds" : 4.9,
+  "sensors" : 4,
+  "serial" : "DVT2AQ16080011",
+  "serviceName" : "Atlas360@AQ1723000230",
+  "socs" : 2,
+  "streamLensesSeen" : 4,
+  "streamTestedAt" : "2026-08-16T22:13:21Z",
+  "verdict" : "FAIL"
+}

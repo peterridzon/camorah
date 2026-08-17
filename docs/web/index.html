@@ -1,0 +1,494 @@
+<meta charset="utf-8">
+<title>4i Studio</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#0a0a0b; --panel:#141416; --panel2:#1b1b1e; --line:#26262a;
+    --fg:#ececed; --dim:#93939a; --faint:#5c5c64;
+    --amber:#e8a33d; --amberGlow:#ffc766; --prog:#e0202a; --prev:#2fbf62;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+    --pad:clamp(18px,4vw,64px);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+       -webkit-font-smoothing:antialiased}
+  a{color:var(--amber)}
+  section{padding:clamp(48px,7vw,96px) var(--pad);border-bottom:1px solid var(--line)}
+  .lede{max-width:66ch}
+  .lede p:last-child{margin-bottom:0}
+  h1,h2,h3{line-height:1.15;margin:0 0 .5em;letter-spacing:-.015em}
+  h2{font-size:clamp(24px,3.2vw,38px)}
+  h3{font-size:clamp(17px,2vw,21px);margin-top:2em}
+  p{margin:0 0 1em;color:var(--dim)}
+  p strong,li strong{color:var(--fg);font-weight:600}
+  .kicker{font:700 10.5px/1 var(--mono);letter-spacing:.24em;text-transform:uppercase;
+          color:var(--amber);margin-bottom:1.4em;display:block}
+
+  /* ---------- nav ---------- */
+  nav{position:sticky;top:0;z-index:50;display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+      padding:11px var(--pad);background:rgba(10,10,11,.86);backdrop-filter:blur(14px);
+      border-bottom:1px solid var(--line)}
+  nav b{font:700 13px/1 var(--mono);letter-spacing:.14em;color:var(--amber);margin-right:14px}
+  nav a{color:var(--dim);text-decoration:none;font-size:13px;padding:6px 10px;border-radius:6px}
+  nav a:hover{color:var(--fg);background:#1e1e22}
+  nav .grow{flex:1}
+  nav .ver{font:600 11px/1 var(--mono);color:var(--faint)}
+  nav a.gh{margin-left:12px;color:#141417;font-weight:700;
+       background:linear-gradient(178deg,#ffd88a,var(--amber));border:1px solid #4d3208}
+  nav a.gh:hover{color:#141417;background:linear-gradient(178deg,#ffe6ad,#efb355)}
+
+  /* ---------- hero ---------- */
+  header{padding:clamp(56px,9vw,132px) var(--pad) clamp(40px,5vw,64px)}
+  header h1{font-size:clamp(38px,7vw,84px);font-weight:800}
+  header h1 span{color:var(--amber)}
+  header .sub{font-size:clamp(17px,2.2vw,23px);color:var(--dim);max-width:64ch;margin-top:.2em}
+  .cta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:clamp(24px,3vw,36px)}
+  .btn{text-decoration:none;border-radius:10px;padding:12px 20px;font-size:14.5px;
+       font-weight:600;border:1px solid var(--line);color:var(--fg);background:var(--panel);
+       transition:all .14s}
+  .btn:hover{border-color:#45454e;transform:translateY(-1px)}
+  .btn.primary{color:#141417;border-color:#4d3208;
+       background:linear-gradient(178deg,#ffd88a,var(--amber))}
+  .btn.primary:hover{background:linear-gradient(178deg,#ffe6ad,#efb355)}
+  .cta-note{font-size:12.5px;color:var(--faint);margin-left:6px}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;
+         margin-top:clamp(28px,4vw,48px);max-width:900px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .stat b{display:block;font:800 clamp(22px,3vw,30px)/1 var(--mono);color:var(--amber)}
+  .stat span{font-size:12px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+
+  /* ---------- the designs, as page ----------
+     Not demos in a box. There is no frame, no chrome and no scrollbar: the
+     mockup reports its own height and is given exactly that, so it reads as a
+     part of this page that happens to be alive. */
+  .stage{margin:30px 0 4px;overflow:hidden}
+  .stage iframe{display:block;width:100%;border:0;background:transparent;
+                transform-origin:0 0}
+
+  /* ---------- generic blocks ---------- */
+  .grid{display:grid;gap:14px;margin-top:26px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:18px}
+  .card h4{margin:0 0 .5em;font-size:15px}
+  .card p{margin:0;font-size:14px}
+  .card .n{font:700 11px/1 var(--mono);color:var(--amber);letter-spacing:.1em;display:block;
+           margin-bottom:10px}
+
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font:700 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  td code{font:600 12.5px/1 var(--mono);color:var(--amberGlow)}
+
+  /* ---------- signal path ---------- */
+  .path{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:22px 0;font-size:13px}
+  .node{border:1px solid var(--line);border-radius:8px;padding:7px 12px;background:var(--panel)}
+  .node.cc{border-color:var(--amber);color:var(--amberGlow)}
+  .node.iso{border-color:var(--prev);color:var(--prev)}
+  .node.out{border-color:var(--prog);color:#ff8a8f}
+  .arr{color:var(--faint)}
+
+  /* ---------- tutorial ---------- */
+  ol.steps{counter-reset:s;list-style:none;padding:0;margin:26px 0 0}
+  ol.steps li{counter-increment:s;position:relative;padding:0 0 22px 52px;
+              border-left:1px solid var(--line);margin-left:16px}
+  ol.steps li::before{content:counter(s,decimal-leading-zero);position:absolute;left:-17px;top:0;
+       width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+       font:700 11px/1 var(--mono);color:#141417;
+       background:linear-gradient(178deg,#ffd88a,var(--amber));border:1px solid #6b4415}
+  ol.steps li:last-child{border-left-color:transparent}
+  ol.steps h4{margin:2px 0 .35em;font-size:16px}
+  ol.steps p{font-size:14.5px;margin:0}
+  kbd{font:700 11.5px/1 var(--mono);background:#26221a;border:1px solid #6b4d18;
+      color:var(--amberGlow);border-radius:4px;padding:3px 6px}
+
+  footer{padding:36px var(--pad) 72px;color:var(--faint);font-size:13px}
+  .changelog li{font-size:14px;color:var(--dim);margin-bottom:6px}
+  .changelog b{color:var(--fg)}
+  .changelog time{font:600 11px/1 var(--mono);color:var(--amber);margin-right:8px}
+</style>
+
+<nav>
+  <b>4i STUDIO</b>
+  <a href="#resolution">Resolution</a>
+  <a href="#flow">How it works</a>
+  <a href="#what">What it is</a>
+  <a href="#desk">The desk</a>
+  <a href="#philosophy">Philosophy</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#multiview">Multiview</a>
+  <a href="#colour">Colour</a>
+  <a href="#rig">Rig check</a>
+  <a href="#tutorial">Tutorial</a>
+  <span class="grow"></span>
+  <span class="ver" id="ver"></span>
+  <a class="gh" href="https://github.com/peterridzon/camorah" target="_blank" rel="noopener">Source ↗</a>
+</nav>
+
+<header>
+  <span class="kicker">Live 360° production · macOS</span>
+  <h1>Multicam 360°, cut live,<br><span>out in 4K.</span></h1>
+  <p class="sub">
+    A vision mixer for immersive shows: twenty-four cameras on one desk, cut and shaded in
+    real time, stitched to a full 4K sphere on the way out. Resolution is not baked in —
+    the desk scales with the cameras you put in front of it, to 8K and beyond.
+  </p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/peterridzon/camorah/releases" target="_blank" rel="noopener">
+      Download the app</a>
+    <a class="btn" href="https://github.com/peterridzon/camorah" target="_blank" rel="noopener">Source on GitHub</a>
+    <span class="cta-note">macOS · no vendor software · no account</span>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b>4K</b><span>stitched output</span></div>
+    <div class="stat"><b>16K</b><span>ceiling by design</span></div>
+    <div class="stat"><b>24</b><span>cameras, live</span></div>
+    <div class="stat"><b>0</b><span>vendor software</span></div>
+  </div>
+</header>
+
+<!-- ============ RESOLUTION ============ -->
+<section id="resolution">
+  <span class="kicker">Resolution</span>
+  <div class="lede">
+    <h2>The desk does not know what resolution it is running.</h2>
+    <p>
+      Nothing in the signal path is written for a picture size. Nodes record by
+      <strong>stream copy</strong>, so they are indifferent by construction. The Mac decodes
+      exactly two cameras — programme and preview — and hands the same four lanes onward in
+      whatever shape they arrived. The sphere is assembled at the far end, and it is the
+      stitcher that decides how big it comes out.
+    </p>
+  </div>
+
+  <div class="grid g3">
+    <div class="card"><span class="n">TODAY</span><h4>4K sphere</h4>
+      <p>Twenty-four Orah 4i, four lenses each at 1920×1440, stitched to a full 4K 360°
+         output. Proven end to end.</p></div>
+    <div class="card"><span class="n">TOMORROW</span><h4>8K and 16K</h4>
+      <p>Put larger sensors in front of it and the same desk carries them. The ceiling is the
+         hardware decoder and the stitcher, never the application.</p></div>
+    <div class="card"><span class="n">ANY CAMERA</span><h4>Not an Orah tool</h4>
+      <p>Orah is what it was built against because that fleet exists and its maker does not.
+         Anything that publishes RTMP fits the same desk.</p></div>
+  </div>
+</section>
+
+<!-- ============ SIGNAL FLOW ============ -->
+<section id="flow">
+  <span class="kicker">How it works</span>
+  <div class="lede">
+    <h2>The whole show, from the truss to the audience.</h2>
+    <p>Every amber device is a real thing in the van. Tap one.</p>
+  </div>
+
+  <div class="stage">
+    <iframe src="signalflow.html?embed=1" title="Signal flow" scrolling="no"></iframe>
+  </div>
+</section>
+
+<!-- ============ WHAT ============ -->
+<section id="what">
+  <span class="kicker">What it is</span>
+  <div class="lede">
+    <h2>The camera outlived its company. The show did not have to.</h2>
+    <p>
+      The Orah 4i is a four-lens 360° camera. Each unit carries two SoCs on consecutive
+      addresses and publishes <strong>four RTMP streams at 1920×1440</strong>, which a stitching
+      box used to assemble into a 4K sphere. Orah is gone: the update servers are dead, the
+      boxes were unstable, and there is no way to buy a replacement for either.
+    </p>
+    <p>
+      4i Studio replaces the whole chain. It finds the cameras without help, drives them over
+      their own protocol, mixes them on the GPU and hands the result to Vahana — while the
+      Linux nodes record every camera in isolation, untouched.
+    </p>
+  </div>
+
+  <div class="grid g3">
+    <div class="card"><span class="n">FINDS THEM</span><h4>Without Bonjour</h4>
+      <p>Multicast between a wireless client and wired cameras is what access points drop.
+         The wire always knows: an ARP sweep by Orah's own MAC prefix finds every unit,
+         announced or not.</p></div>
+    <div class="card"><span class="n">KEEPS THEM</span><h4>Presence by MAC</h4>
+      <p>DHCP hands a released address to the next camera that asks. A port answering proves
+         something is alive, not that it is the same camera. Identity is the burned-in MAC.</p></div>
+    <div class="card"><span class="n">RUNS THEM</span><h4>Hand-rolled protocol</h4>
+      <p>CamAPI protobuf over WebSocket, written from the wire up — no protoc, no vendor
+         library, no server to phone home to.</p></div>
+  </div>
+</section>
+
+<!-- ============ DESK ============ -->
+<section id="desk">
+  <span class="kicker">The desk</span>
+  <div class="lede">
+    <h2>A vision mixer, not a settings screen.</h2>
+    <p>Twelve plus twelve on each bus, and a T-bar you can find without looking.</p>
+  </div>
+
+  <div class="stage">
+    <iframe src="../ux/switcher.html?embed=1" title="Console" scrolling="no"></iframe>
+  </div>
+</section>
+
+<!-- ============ PHILOSOPHY ============ -->
+<section id="philosophy">
+  <span class="kicker">Philosophy</span>
+  <div class="lede">
+    <h2>Everything on this desk was measured, not assumed.</h2>
+    <p>
+      The rules below are not preferences. Each one is what a real camera did on a real
+      bench, written down so nobody has to rediscover it at an event.
+    </p>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h4>Only pictures prove anything</h4>
+      <p>The camera reports success the moment it accepts a command, long before a packet
+         moves. Every state in this app is decided by streams arriving, never by a return
+         code.</p></div>
+    <div class="card"><h4>Never send what it cannot come back from</h4>
+      <p>This firmware can be wedged by talking to it too fast. Commands are paced, START is
+         asked once, and a camera being worked on is left completely alone.</p></div>
+    <div class="card"><h4>The recording is sacred</h4>
+      <p>Nodes record every camera ISO by stream copy. Colour, mixing and effects ride the
+         live path only — there is no setting that can contaminate the master.</p></div>
+    <div class="card"><h4>Say which of the two problems it is</h4>
+      <p>"Camera is not there" and "camera is there but silent" send different people to
+         different places. The interface never merges them.</p></div>
+    <div class="card"><h4>One state, one place</h4>
+      <p>There used to be four sources for "is it working". They disagreed, and the desk
+         showed a camera on air beside a button offering to start it. Now: one function.</p></div>
+    <div class="card"><h4>Colour means the same everywhere</h4>
+      <p>Amber is ready, red is on air, green is next. A second meaning for the same colour
+         is exactly what misreads at speed, so it never gets one.</p></div>
+  </div>
+</section>
+
+<!-- ============ ARCHITECTURE ============ -->
+<section id="architecture">
+  <span class="kicker">Architecture</span>
+  <div class="lede">
+    <h2>One Mac in the gallery, Linux nodes at the cameras.</h2>
+    <p>
+      Twenty-four cameras at ~15 Mbit/s per lens is several gigabits. Nothing of that size goes
+      near the gallery: cameras publish to the node that owns them, and only what is on air
+      crosses the room.
+    </p>
+  </div>
+
+  <div class="path">
+    <span class="node">Orah 4i · 4 lenses</span><span class="arr">→</span>
+    <span class="node">node · MediaMTX</span><span class="arr">→</span>
+    <span class="node iso">RECORD · ISO, stream copy</span>
+    <span style="width:20px"></span>
+    <span class="node">proxy</span><span class="arr">→</span>
+    <span class="node">Mac · VideoToolbox decode</span><span class="arr">→</span>
+    <span class="node cc">colour · per camera</span><span class="arr">→</span>
+    <span class="node">Metal dissolve</span><span class="arr">→</span>
+    <span class="node out">PROGRAM → Vahana</span>
+  </div>
+
+  <table>
+    <tr><th>Layer</th><th>Built with</th><th>Why</th></tr>
+    <tr><td>Camera control</td><td><code>CamAPI protobuf / WebSocket</code></td>
+        <td>Hand-written codec; the vendor's tooling no longer exists.</td></tr>
+    <tr><td>Discovery</td><td><code>Bonjour + ARP by OUI</code></td>
+        <td>Bonjour is best-effort. The MAC prefix is not.</td></tr>
+    <tr><td>Transport</td><td><code>MediaMTX 1.20</code></td>
+        <td>RTMP ingest and programme republish, config generated per run.</td></tr>
+    <tr><td>Decode / encode</td><td><code>VideoToolbox</code></td>
+        <td>Hardware both ways; frames never touch CPU memory.</td></tr>
+    <tr><td>Mix and colour</td><td><code>Metal</code></td>
+        <td>Dissolve and per-camera correction in one pass.</td></tr>
+    <tr><td>Recording</td><td><code>node agent · stream copy</code></td>
+        <td>ISO per camera, bit-exact, independent of the desk.</td></tr>
+  </table>
+</section>
+
+<!-- ============ MULTIVIEW ============ -->
+<section id="multiview">
+  <span class="kicker">Multiview</span>
+  <div class="lede">
+    <h2>Two generators, because 24 portraits do not fit one screen.</h2>
+    <p>Twenty-four <strong>1440×1920</strong> portraits tile properly at 8×3 and nowhere else.</p>
+  </div>
+
+  <div class="stage">
+    <iframe src="../ux/multiview.html?embed=1" title="Multiview" scrolling="no"></iframe>
+  </div>
+</section>
+
+<!-- ============ COLOUR ============ -->
+<section id="colour">
+  <span class="kicker">Colour</span>
+  <div class="lede">
+    <h2>Shading per camera, on the live path only.</h2>
+    <p>Lever for exposure, puck for gamma and black.
+       <strong>The ISO recording never sees any of it.</strong></p>
+  </div>
+
+  <div class="stage">
+    <iframe src="../ux/colour.html?embed=1" title="Colour correction" scrolling="no"></iframe>
+  </div>
+</section>
+
+<!-- ============ RIG ============ -->
+<section id="rig">
+  <span class="kicker">Rig check</span>
+  <div class="lede">
+    <h2>Install day is a different job from show day.</h2>
+    <p>Per camera: is it there, is it talking, is it sending.</p>
+  </div>
+
+  <div class="stage">
+    <iframe src="../ux/rig-check.html?embed=1" title="Rig check" scrolling="no"></iframe>
+  </div>
+</section>
+
+<!-- ============ TUTORIAL ============ -->
+<section id="tutorial">
+  <span class="kicker">Tutorial</span>
+  <div class="lede">
+    <h2>From a box of cameras to a show, in eight steps.</h2>
+  </div>
+
+  <ol class="steps">
+    <li><h4>Power the cameras and open 4i Studio</h4>
+      <p>Nothing to configure. The app sweeps the subnet by MAC prefix and adopts anything
+         answering on port 9989, whether or not it announced itself.</p></li>
+
+    <li><h4>Run the rig check</h4>
+      <p>Every camera shows one of: <strong>not on the network</strong>, <strong>still
+         booting</strong>, <strong>ready — press Start</strong>, or a count of lenses arriving.
+         A camera someone is working on gets <kbd>FIX</kbd> and is left alone.</p></li>
+
+    <li><h4>Number them once</h4>
+      <p><kbd>INSTALL</kbd> binds a serial to a position. The number follows the hardware from
+         then on, so recordings and scenes line up with yesterday's.</p></li>
+
+    <li><h4>Press Start All</h4>
+      <p>Each camera is stopped, given its target and started once. About twenty seconds to
+         all four lenses. A <code>START</code> answered <code>UNKNOWN_ERROR</code> means at
+         least one SoC did not come up — that unit needs its power pulled, not another try.</p></li>
+
+    <li><h4>Lay out the multiview</h4>
+      <p>Pick a variant, switch the free boxes on or off, and send any source to a box with its
+         amber <kbd>1</kbd>–<kbd>4</kbd> keys. Undock it onto the second monitor.</p></li>
+
+    <li><h4>Match the cameras</h4>
+      <p>In the colour corrector, work camera by camera: lever for exposure, puck for gamma and
+         black, wheels for trim. <kbd>BYPASS</kbd> shows what you started from. The recording
+         is not affected.</p></li>
+
+    <li><h4>Assign the keys</h4>
+      <p>Button order is not camera order. In <kbd>⚙ Assign</kbd>, put them left to right in
+         the order they stand on site, and choose whether keys read a name or a number.</p></li>
+
+    <li><h4>Cut the show</h4>
+      <p>Preview selects, <kbd>CUT</kbd> takes, <kbd>AUTO</kbd> dissolves at the rate you set,
+         the T-bar does it by hand. Programme leaves for Vahana; the nodes go on recording
+         every camera clean, whatever happens on the desk.</p></li>
+  </ol>
+</section>
+
+<!-- ============ CHANGELOG ============ -->
+<section id="changelog">
+  <span class="kicker">Change log</span>
+  <h2>What moved, and when.</h2>
+  <p class="lede">
+    This page is written from the same designs the application is built from. When the UX or the
+    behaviour changes, both change together — and the entry lands here.
+  </p>
+  <ul class="changelog" id="log"></ul>
+</section>
+
+<footer>
+  <strong style="color:var(--fg)">4i Studio</strong> — live 360° production for Orah 4i.
+  Designs on this page are the live mockups, not screenshots: everything in them is clickable.
+  <a href="https://github.com/peterridzon/camorah" target="_blank" rel="noopener">Source and releases on GitHub</a>.
+  <span id="built"></span>
+</footer>
+
+<script>
+/* The change log lives here as data so a single edit updates the page, the nav
+   version and the footer date together. Newest first. */
+const CHANGES = [
+  {d:"2026-08-17", t:"Says what it actually is",
+   b:"Multicam 360° cut live, out as a full 4K sphere — and resolution-agnostic by "
+    +"construction, so the same desk carries 8K and 16K when the cameras do."},
+  {d:"2026-08-17", t:"Designs embedded as page, not as demos in a box",
+   b:"No frames, no chrome, no inner scrollbars: each mockup reports its own height and gets "
+    +"exactly that."},
+  {d:"2026-08-17", t:"Signal-flow map redrawn as one icon set",
+   b:"Every device built from the same block at the same angle, thin strokes throughout, and "
+    +"the headset at the end — because the 360° programme is not for a rectangle."},
+  {d:"2026-08-17", t:"Interactive signal-flow map",
+   b:"The whole OB van as clickable blocks — cameras, switches, nodes, gallery, Vahana — "
+    +"with the recording path kept visibly separate from the live one."},
+  {d:"2026-08-17", t:"Renamed to 4i Studio",
+   b:"Support and log folders carry over from the old name, so the camera records survive."},
+  {d:"2026-08-17", t:"Colour correction",
+   b:"Per-camera shading on the live path: exposure lever, two-axis puck, Lift/Gamma/Gain, "
+    +"BYPASS. The ISO recording is untouched by design."},
+  {d:"2026-08-17", t:"Console and multiview as separate windows",
+   b:"Docked in one frame, either can be undocked onto its own display. Boxes 3 and 4 are quad "
+    +"splits; preview and program stay whole."},
+  {d:"2026-08-17", t:"Tiles take the shape of the signal",
+   b:"3:4 everywhere, so the tally border frames the picture instead of the space around it."},
+  {d:"2026-08-17", t:"Presence decided by MAC, not by an open port",
+   b:"Unplugged cameras leave in about ten seconds instead of six minutes, and a recycled DHCP "
+    +"lease no longer keeps a camera on the desk that is in a flight case."},
+  {d:"2026-08-17", t:"UNKNOWN_ERROR on START reads as a fault, not as noise",
+   b:"Measured across sixteen units: it means at least one SoC did not start. Retrying never "
+    +"helped and made one camera worse."},
+  {d:"2026-08-16", t:"First real picture on the desk",
+   b:"Thirteen cameras proven end to end at four lenses each."}
+];
+
+document.getElementById("log").innerHTML = CHANGES.map(c =>
+  `<li><time>${c.d}</time><b>${c.t}</b> — ${c.b}</li>`).join("");
+document.getElementById("ver").textContent = "updated " + CHANGES[0].d;
+document.getElementById("built").textContent = "Last change " + CHANGES[0].d + ".";
+
+/* The designs are built for a desk, so on anything narrower they are scaled to
+   fit rather than made to scroll sideways. Height comes from the page itself —
+   it measures and posts it — and is scaled by the same factor, which is what
+   keeps the section exactly as tall as its contents and never a pixel more. */
+const NATURAL = 1680;
+const heights = new Map();
+
+function fit(){
+  document.querySelectorAll(".stage iframe").forEach(f=>{
+    const have = f.parentElement.clientWidth;
+    const k = Math.min(1, have / NATURAL);
+    f.style.width = (100 / k) + "%";
+    f.style.transform = k < 1 ? `scale(${k})` : "none";
+    const h = heights.get(f.getAttribute("src")) || 900;
+    f.style.height = h + "px";
+    f.parentElement.style.height = Math.ceil(h * k) + "px";
+  });
+}
+
+addEventListener("message", e => {
+  const d = e.data;
+  if(!d || !d.embedHeight) return;
+  // Match the message to its frame by the file it came from.
+  document.querySelectorAll(".stage iframe").forEach(f=>{
+    if(d.from && d.from.endsWith(f.getAttribute("src").split("?")[0].split("/").pop())){
+      if(heights.get(f.getAttribute("src")) !== d.embedHeight){
+        heights.set(f.getAttribute("src"), d.embedHeight);
+        fit();
+      }
+    }
+  });
+});
+
+fit();
+addEventListener("resize", fit);
+</script>

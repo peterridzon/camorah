@@ -1,0 +1,524 @@
+<meta charset="utf-8">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml"><title>Switcher Desk</title>
+<style>
+  :root{
+    --bg:#0b0b0c; --panel:#141416; --panel2:#1b1b1e; --line:#2a2a2e;
+    --fg:#e8e8ea; --dim:#8a8a90; --faint:#55555c;
+    --prog:#e0202a; --prev:#2fbf62; --amber:#e8a33d; --amberGlow:#ffc766;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1640px;margin:0 auto;padding:16px 16px 60px}
+  .note{color:var(--dim);font-size:13px;margin:0 0 14px;max-width:84ch}
+  .note b{color:var(--fg);font-weight:600}
+  .lbl{font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);
+       white-space:nowrap}
+
+  /* ---------- frame and docked panes ----------
+     Console and multiview are separate windows of one application. Docked they
+     stack in a single frame; ⇱ undocks either onto its own display and the frame
+     closes up. One app with two windows, not two apps. */
+  .pane{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+        overflow:hidden;margin-bottom:12px}
+  .pbar{display:flex;align-items:center;gap:11px;padding:8px 11px;background:var(--panel2);
+        border-bottom:1px solid var(--line)}
+  .pbar .who{font:700 10.5px/1 var(--mono);letter-spacing:.16em;color:var(--amber)}
+  .pbar .grow{flex:1}
+  .iconbtn{background:#232327;border:1px solid var(--line);color:var(--dim);border-radius:6px;
+           padding:5px 10px;font-size:11px;cursor:pointer}
+  .iconbtn:hover{color:var(--fg);border-color:#3a3a40}
+  .iconbtn.hot{color:#141417;background:linear-gradient(178deg,#ffd88a,var(--amber));
+               border-color:#4d3208;font-weight:700}
+  .pbody{padding:11px}
+
+  .float{position:fixed;z-index:20;background:var(--panel);border:1px solid #3a3a40;
+         border-radius:11px;box-shadow:0 26px 70px rgba(0,0,0,.82);overflow:hidden;
+         width:min(1200px,92vw)}
+  .float .pbar{cursor:grab;background:#232327}
+  .float .pane{margin:0;border:0;border-radius:0}
+  .lights{display:flex;gap:6px;margin-right:2px}
+  .lights i{width:11px;height:11px;border-radius:50%;display:block}
+  .parked{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px dashed #3a3a40;
+          border-radius:9px;color:var(--faint);font-size:12px;margin-bottom:12px}
+
+  /* ---------- multiview ---------- */
+  .mvwrap{display:grid;gap:7px}
+  /* Boxes are capped. A 3:4 portrait stretched to a quarter of the desk width
+     would stand taller than the whole console beneath it — and what you operate
+     has to be visible at the same time as what you are watching. */
+  .bigrow{display:grid;grid-template-columns:repeat(4,minmax(0,238px));gap:6px;
+          justify-content:center}
+  .thumbs{display:grid;grid-template-columns:repeat(12,1fr);gap:5px}
+  .cell{position:relative;background:#000;border-radius:4px;overflow:hidden;
+        border:2px solid #1e1e22;display:flex;align-items:center;justify-content:center;
+        container-type:size;min-width:0}
+  /* A tile takes the shape of the signal, not the shape of the grid. The cell
+     used to be 4:3 or square with the 3:4 picture centred inside it, which left
+     black margins and made the tally border frame the space rather than the
+     picture. The cell is 3:4 now, the picture fills it, the border sits on it. */
+  .bigrow .cell, .thumbs .cell{aspect-ratio:3/4}
+  .thumbs .cell{cursor:pointer}
+
+  .pic{position:relative;width:100%;height:100%;overflow:hidden;
+       background:linear-gradient(160deg,#2c3038 0%,#1a1d22 45%,#0e1013 100%)}
+  .cell.empty .pic{background:#101012}
+  .cell.pgm{border-color:var(--prog)} .cell.pvw{border-color:var(--prev)}
+  .cell.free{border-color:var(--amber)}
+  /* A quad box: four sources in one frame, each a 3:4 portrait of its own. */
+  .quadbox{display:block;background:#000}
+  .quads{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;
+         grid-template-rows:1fr 1fr;gap:2px}
+  .quad{position:relative;overflow:hidden;cursor:pointer}
+  .quad .qpic{position:absolute;inset:0;
+       background:linear-gradient(160deg,#2c3038 0%,#1a1d22 45%,#0e1013 100%)}
+  .quad.empty .qpic{background:#101012}
+  .quad .cap{font-size:8.5px;padding:2px 5px;bottom:3px}
+  .cap{position:absolute;left:50%;bottom:4px;transform:translateX(-50%);
+       background:rgba(0,0,0,.78);color:var(--amberGlow);
+       font:600 9.5px/1 -apple-system,sans-serif;
+       letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border-radius:3px;
+       white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis}
+  .bigrow .cap{font-size:11.5px;padding:4px 11px}
+  .role{position:absolute;left:4px;top:4px;font:700 8px/1 var(--mono);letter-spacing:.1em;
+        padding:3px 5px;border-radius:2px;background:rgba(0,0,0,.66);color:#c9c9cf}
+  .cell.pgm .role{background:var(--prog);color:#fff}
+  .cell.pvw .role{background:var(--prev);color:#04240f}
+  .cell.free .role{background:var(--amber);color:#141417}
+  /* Amber mini keys — send this source to one of the free boxes. */
+  .send{position:absolute;right:3px;top:3px;display:flex;gap:2px;z-index:2}
+  .send button{width:14px;height:14px;border-radius:3px;cursor:pointer;padding:0;
+       border:1px solid #6b4d18;background:rgba(20,18,13,.88);color:#b98b45;
+       font:700 8px/1 var(--mono)}
+  .send button:hover{border-color:var(--amber);color:var(--amberGlow)}
+  .send button.on{background:linear-gradient(178deg,#ffd88a,var(--amber));color:#141417;
+       border-color:#ffd88a;box-shadow:0 0 7px rgba(232,163,61,.8)}
+  .send button.off{opacity:.22;cursor:default}
+  /* A camera carrying a correction has to admit it on the source too. */
+  .cc{position:absolute;left:4px;bottom:4px;z-index:2;font:700 7.5px/1 var(--mono);
+      letter-spacing:.1em;padding:2px 4px;border-radius:2px;
+      background:rgba(232,163,61,.9);color:#141417}
+
+  /* ---------- konzola ---------- */
+  .desk{display:grid;grid-template-columns:1fr auto auto;gap:13px;align-items:stretch}
+  .block{background:#0e0e10;border:1px solid var(--line);border-radius:9px;padding:11px}
+  .desk > .block:first-child{display:flex;flex-direction:column;justify-content:space-between}
+  .bushead{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+  .bushead .who{font:700 11px/1 var(--mono);letter-spacing:.16em}
+  .bushead.p .who{color:var(--prog)} .bushead.v .who{color:var(--prev)}
+  .row{display:grid;grid-template-columns:repeat(12,1fr);gap:5px;margin-bottom:5px}
+  .row:last-child{margin-bottom:0}
+  .bus{margin-bottom:11px} .bus:last-child{margin-bottom:0}
+
+  /* A key. An exact square, so columns line up at any window width.
+     The frame is our amber from the rig check, where it means "this unit is
+     ready" — it means the same here. The lamp along the top edge is the second
+     sentence: "and it can go to air". */
+  .btn{position:relative;aspect-ratio:1;border-radius:9px;border:1.5px solid var(--amber);
+       background:linear-gradient(178deg,#26221a 0%,#1b1813 52%,#221e17 100%);
+       color:var(--amberGlow);cursor:pointer;overflow:hidden;
+       display:flex;align-items:center;justify-content:center;padding:15px 5px 5px;
+       font:700 11.5px/1.1 -apple-system,sans-serif;letter-spacing:.1em;
+       text-align:center;text-transform:uppercase;
+       box-shadow:0 2px 3px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,199,102,.22),
+                  inset 0 -2px 4px rgba(0,0,0,.45)}
+  .btn::before{content:"";position:absolute;left:7%;right:7%;top:4%;height:36%;
+       border-radius:50%/60%;pointer-events:none;
+       background:linear-gradient(180deg,rgba(255,199,102,.14),transparent)}
+  .btn::after{content:"";position:absolute;left:22%;right:22%;top:5px;height:3px;
+       border-radius:2px;background:var(--amber);box-shadow:0 0 7px rgba(232,163,61,.85)}
+  .btn span{position:relative;z-index:1;word-break:break-word}
+  .btn:active{transform:translateY(1px)}
+  .btn.empty{background:linear-gradient(178deg,#1a1a1d,#121214);border:1.5px solid #232327;
+       cursor:default;box-shadow:inset 0 -2px 4px rgba(0,0,0,.5)}
+  .btn.empty::before,.btn.empty::after{display:none}
+  .btn.empty span{color:transparent}
+  .btn.hot{background:linear-gradient(178deg,#ff6b70 0%,var(--prog) 46%,#a8121a 60%,#d81f28 100%);
+       color:#fff;border-color:#ff8a8f;
+       box-shadow:0 0 22px rgba(224,32,42,.75),0 2px 3px rgba(0,0,0,.7),
+                  inset 0 1px 0 rgba(255,255,255,.5)}
+  .btn.hot::after{background:#fff;box-shadow:0 0 9px rgba(255,255,255,.95)}
+  .btn.on{background:linear-gradient(178deg,#7bf3ab 0%,var(--prev) 46%,#14853f 60%,#28ad58 100%);
+       color:#04240f;border-color:#8ff7b8;
+       box-shadow:0 0 22px rgba(47,191,98,.62),0 2px 3px rgba(0,0,0,.7),
+                  inset 0 1px 0 rgba(255,255,255,.6)}
+  .btn.on::after{background:#eafff2;box-shadow:0 0 9px rgba(234,255,242,.95)}
+  /* Dot in the key corner: this camera is carrying a colour correction. */
+  .btn i{position:absolute;right:5px;bottom:5px;width:6px;height:6px;border-radius:50%;
+       background:var(--amber);box-shadow:0 0 6px var(--amber);z-index:1}
+
+  /* ---------- transition ---------- */
+  .tblock{width:206px;display:flex;flex-direction:column;gap:10px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+  .tbtn{position:relative;height:44px;border-radius:9px;cursor:pointer;overflow:hidden;
+        border:1.5px solid #6b4d18;color:#b98b45;
+        background:linear-gradient(178deg,#26221a 0%,#1b1813 52%,#221e17 100%);
+        font:700 11.5px/1.1 -apple-system,sans-serif;letter-spacing:.1em;text-transform:uppercase;
+        box-shadow:0 2px 3px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,199,102,.18)}
+  .tbtn::before{content:"";position:absolute;left:7%;right:7%;top:5%;height:38%;
+        border-radius:50%/60%;pointer-events:none;
+        background:linear-gradient(180deg,rgba(255,199,102,.13),transparent)}
+  .tbtn:active{transform:translateY(1px)}
+  .tbtn.sel{background:linear-gradient(178deg,#ffd88a 0%,var(--amber) 46%,#a06b12 60%,#d4941f 100%);
+        border-color:#ffd88a;color:#141417;box-shadow:0 0 20px rgba(232,163,61,.6)}
+  .tbtn.armed{background:linear-gradient(178deg,#ff6b70 0%,var(--prog) 46%,#a8121a 60%,#d81f28 100%);
+        color:#fff;border-color:#ff8a8f;box-shadow:0 0 20px rgba(224,32,42,.7)}
+  .tbtn.future{background:linear-gradient(178deg,#1a1a1d,#121214);border:1.5px solid #232327;
+        color:#3d3d45;cursor:default;box-shadow:none}
+  .tbtn.future::before{display:none}
+  .tbtn.big{height:66px;border-color:var(--amber);color:var(--amberGlow)}
+  .rate{display:flex;align-items:center;justify-content:space-between;gap:8px;
+        background:#000;border:1px solid var(--line);border-radius:6px;padding:7px 10px}
+  .rate input{width:56px;background:#000;border:1px solid #303036;color:var(--amber);
+        font:700 13px/1 var(--mono);text-align:center;border-radius:4px;padding:4px}
+
+  /* ---------- T-bar ---------- */
+  .fader{width:146px;min-height:392px;display:flex;flex-direction:column;align-items:center;
+         gap:9px}
+  .ftop{display:flex;gap:13px;align-items:stretch;flex:1;width:100%;justify-content:center}
+  .ladder{display:flex;flex-direction:column-reverse;gap:2px;justify-content:space-between;
+          padding:3px 0}
+  /* One hue, brightness alone carries the value. Red and green are spoken for
+     by program and preview — a second meaning for the same colour is exactly
+     what misreads on a desk. */
+  .led{width:13px;height:8px;border-radius:1.5px;background:#1c1712;
+       box-shadow:inset 0 0 2px #000;transition:background .06s linear,box-shadow .06s linear}
+  .track{position:relative;width:66px;border-radius:8px;background:#0a0a0b;
+         border:1px solid var(--line);box-shadow:inset 0 0 20px #000}
+  .track::before{content:"";position:absolute;left:50%;top:12px;bottom:12px;width:5px;
+         transform:translateX(-50%);background:#000;border-radius:3px}
+  /* The handle really is a T: a crossbar you grab and a stem that keeps it in
+     the track. The crossbar overhangs the track on both sides so it can be found
+     without looking, which is the whole point of a T-bar. Amber, so the hand
+     finds the one control on the desk that is dragged rather than pressed. */
+  .handle{position:absolute;left:-14px;right:-14px;height:52px;cursor:grab;
+         background:transparent;border:0}
+  .handle::before{content:"";position:absolute;left:0;right:0;top:0;height:26px;
+         border-radius:7px;
+         background:linear-gradient(180deg,#ffe0a6 0%,var(--amberGlow) 38%,#c9832a 52%,
+                                    var(--amber) 66%,#8a5a13 100%);
+         border:1px solid #6b4415;
+         box-shadow:0 3px 9px rgba(0,0,0,.85),0 0 18px rgba(232,163,61,.42),
+                    inset 0 1px 0 rgba(255,245,220,.9)}
+  .handle::after{content:"";position:absolute;left:50%;transform:translateX(-50%);
+         top:24px;width:26px;height:26px;border-radius:0 0 6px 6px;
+         background:linear-gradient(180deg,#c9832a,#7d5112 70%,#5c3a0c);
+         border:1px solid #6b4415;border-top:0;
+         box-shadow:0 3px 7px rgba(0,0,0,.8),inset 1px 0 0 rgba(255,220,160,.35)}
+  .handle:active{cursor:grabbing}
+  .fends{display:flex;justify-content:space-between;width:100%;padding:0 4px}
+
+  /* ---------- assign ---------- */
+  .sheet{position:fixed;inset:0;background:rgba(0,0,0,.74);display:none;align-items:center;
+         justify-content:center;padding:22px;z-index:30}
+  .sheet.open{display:flex}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+        max-width:960px;width:100%;max-height:88vh;overflow:auto}
+  .card h3{margin:0;padding:13px 16px;border-bottom:1px solid var(--line);font-size:14px}
+  .card .body{padding:14px 16px}
+  .hint{color:var(--dim);font-size:12px;margin:0 0 12px}
+  .maprow{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  .mapcell{background:#0e0e10;border:1px solid var(--line);border-radius:6px;padding:7px 8px}
+  .mapcell .k{font:700 10px/1 var(--mono);color:var(--amber);letter-spacing:.06em}
+  .mapcell select{width:100%;margin-top:5px;background:#000;color:var(--fg);
+       border:1px solid #303036;border-radius:4px;padding:4px;font-size:11.5px}
+  .mini-seg{background:#232327;border:1px solid var(--line);color:var(--dim);border-radius:5px;
+       padding:5px 11px;font:700 10.5px/1 var(--mono);letter-spacing:.08em;cursor:pointer}
+  .mini-seg.sel{background:linear-gradient(178deg,#ffd88a,var(--amber));color:#141417;
+       border-color:#4d3208}
+  @media(max-width:1180px){.desk{grid-template-columns:1fr}.tblock,.fader{width:100%}
+       .ftop{height:230px}.maprow{grid-template-columns:repeat(3,1fr)}}
+</style>
+
+<div class="wrap">
+  <p class="note">
+    <b>Design — switcher.</b> Console and multiview are two windows of one application. Docked,
+    they share a frame; <b>⇱</b> undocks either one onto its own display and the frame closes up.
+    Click the buses, drag the T-bar, the amber <b>1–4</b> on a source sends it to a free box. An
+    amber dot on a key means that camera is carrying a colour correction.
+  </p>
+
+  <div id="parked"></div>
+  <div id="frame"></div>
+</div>
+
+<div class="sheet" id="sheet" onclick="if(event.target===this)closeMap()">
+  <div class="card">
+    <h3>Source assignment</h3>
+    <div class="body">
+      <p class="hint">
+        A button number is not a camera number — on the desk you want them left to right in the
+        order they stand on site. The assignment is shared by the program and preview buses.
+      </p>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+        <span class="lbl">Button legend</span>
+        <button class="mini-seg sel" onclick="setLabel('name',this)">BALCONY</button>
+        <button class="mini-seg" onclick="setLabel('number',this)">CAM 20</button>
+      </div>
+      <div class="maprow" id="maprow"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const REAL  = [4,5,7,2,9,12,3,6,10,20,21,22,24];
+const NAMES = {2:"Stage L",3:"Stage R",4:"Front",5:"Front L",6:"Crowd",7:"Front R",
+               9:"Drums",10:"Wide",12:"Bar",20:"Balcony",21:"Backstage",22:"Roof",24:"Spare"};
+const SLOTS = 24;
+const GRADED = new Set([4,9,20]);      // cameras carrying a colour correction
+
+let map = Array.from({length:SLOTS},(_,i)=> REAL[i] ?? null);
+let pgm = 0, pvw = 1, t = 0, labelMode = "name", style = "MIX", prevTrans = false;
+/* Boxes 3 and 4 are quad splits — four sources each. Preview and program stay
+   whole: they are the two the operator is judging, and a quarter of a portrait
+   frame is not enough to judge framing on. */
+let big = [{role:"pvw"},{role:"pgm"},
+           {role:"quad",cams:[9,20,12,3],on:true},
+           {role:"quad",cams:[6,10,21,22],on:true}];
+let floating = {mv:false, desk:false};
+
+const $  = s => document.querySelector(s);
+const nm = c => c == null ? "—" : (NAMES[c] || "cam" + c);
+const face = c => c == null ? "—" : `${nm(c)} · CAM ${String(c).padStart(2,"0")}`;
+
+/* ---------------- multiview ---------------- */
+function mvBody(){
+  const badge = cam => GRADED.has(cam) ? `<span class="cc">CC</span>` : "";
+  const cell = (cls,role,txt,cam) => `
+    <div class="cell ${cls}"><div class="pic"><span class="role">${role}</span>${badge(cam)}
+      <div class="cap">${txt}</div></div></div>`;
+
+  const bigs = big.map((b,i)=>{
+    if(b.role === "pvw") return cell("pvw","PREVIEW", face(map[pvw]), map[pvw]);
+    if(b.role === "pgm") return cell("pgm","PROGRAM", face(map[pgm]), map[pgm]);
+    if(!b.on) return `<div class="cell empty"><div class="pic">
+        <span class="role">BOX ${i+1}</span><div class="cap">OFF</div></div></div>`;
+    const quads = b.cams.map((c,q)=>`
+      <div class="quad ${c==null?"empty":""}" onclick="clearQuad(${i},${q})">
+        <div class="qpic"></div>${badge(c)}
+        <div class="cap">${c==null?"—":nm(c)}</div></div>`).join("");
+    return `<div class="cell free quadbox">
+      <span class="role">BOX ${i+1}</span><div class="quads">${quads}</div></div>`;
+  }).join("");
+
+  const thumbs = map.map((cam,i)=>{
+    if(cam == null) return `<div class="cell empty"><div class="pic"></div></div>`;
+    const send = `<div class="send">` + big.map((b,j)=>{
+      if(b.role !== "quad" || !b.on) return `<button class="off" disabled>${j+1}</button>`;
+      return `<button class="${b.cams.includes(cam)?"on":""}"
+        onclick="event.stopPropagation();sendTo(${j},${cam})">${j+1}</button>`;
+    }).join("") + `</div>`;
+    const cls  = i === pgm ? "pgm" : i === pvw ? "pvw" : "";
+    const role = i === pgm ? "PGM" : i === pvw ? "PVW" : String(cam).padStart(2,"0");
+    return `<div class="cell ${cls}" onclick="press('pvw',${i})">
+      <div class="pic"><span class="role">${role}</span>${send}${badge(cam)}
+        <div class="cap">${nm(cam)}</div></div></div>`;
+  }).join("");
+
+  return `<div class="mvwrap"><div class="bigrow">${bigs}</div>
+            <div class="thumbs">${thumbs}</div></div>`;
+}
+/* An amber key drops the source into the first free quadrant of that box, or
+   pushes out the oldest when all four are taken. Clicking a quadrant clears it. */
+function sendTo(j,cam){
+  const b = big[j];
+  if(b.role !== "quad") return;
+  if(b.cams.includes(cam)) { b.cams[b.cams.indexOf(cam)] = null; render(); return; }
+  const free = b.cams.indexOf(null);
+  if(free >= 0) b.cams[free] = cam; else { b.cams.shift(); b.cams.push(cam); }
+  render();
+}
+function clearQuad(j,q){ big[j].cams[q] = null; render(); }
+
+/* ---------------- konzola ---------------- */
+function deskBody(){
+  const key = (bus,i) => {
+    const cam = map[i];
+    if(cam == null) return `<button class="btn empty" disabled><span>·</span></button>`;
+    const txt = labelMode === "name" ? nm(cam) : "CAM " + String(cam).padStart(2,"0");
+    const cls = bus === "pgm" ? (i === pgm ? "hot" : "") : (i === pvw ? "on" : "");
+    return `<button class="btn ${cls}" onclick="press('${bus}',${i})">
+      <span>${txt}</span>${GRADED.has(cam) ? "<i></i>" : ""}</button>`;
+  };
+  const rows = bus => [0,12].map(from =>
+    `<div class="row">${map.slice(from,from+12).map((_,j)=>key(bus,from+j)).join("")}</div>`).join("");
+
+  return `<div class="desk">
+    <div class="block">
+      <div class="bus"><div class="bushead p"><span class="who">PROGRAM</span>
+        <span class="lbl">always live — pressing takes it to air</span></div>${rows("pgm")}</div>
+      <div class="bus"><div class="bushead v"><span class="who">PREVIEW</span>
+        <span class="lbl">next — takes via CUT, AUTO or the T-bar</span></div>${rows("pvw")}</div>
+    </div>
+
+    <div class="tblock">
+      <div><div class="lbl" style="margin-bottom:6px">Transition style</div>
+        <div class="grid2">
+          <button class="tbtn ${style==="MIX"?"sel":""}" onclick="pickStyle('MIX')">MIX</button>
+          <button class="tbtn ${style==="WIPE"?"sel":""}" onclick="pickStyle('WIPE')">WIPE</button>
+          <button class="tbtn future">—</button><button class="tbtn future">—</button>
+        </div></div>
+      <div class="rate"><span class="lbl">Rate</span><input id="rate" value="0:15"></div>
+      <div><div class="lbl" style="margin-bottom:6px">Transition</div>
+        <div class="grid2">
+          <button class="tbtn big" onclick="cut()">CUT</button>
+          <button class="tbtn big" onclick="auto()">AUTO</button>
+        </div>
+        <button class="tbtn ${prevTrans?"armed":""}" style="width:100%;margin-top:5px"
+                onclick="prevTrans=!prevTrans;render()">PREV TRANS</button></div>
+    </div>
+
+    <div class="block fader">
+      <div class="lbl">T-bar</div>
+      <div class="ftop">
+        <div class="ladder"></div>
+        <div class="track"><div class="handle"></div></div>
+        <div class="ladder"></div>
+      </div>
+      <div class="fends"><span class="lbl">PGM</span><span class="lbl">PST</span></div>
+    </div></div>`;
+}
+function pickStyle(s){ style = s; render(); }
+
+/* ---------------- rám a odtrhnutie ---------------- */
+function pane(d){
+  const f = floating[d.id];
+  return `<section class="pane">
+    <div class="pbar">${f?`<span class="lights"><i style="background:#ff5f57"></i>
+        <i style="background:#febc2e"></i><i style="background:#28c840"></i></span>`:""}
+      <span class="who">${d.title}</span><span class="lbl">${d.sub}</span>
+      <span class="grow"></span>${d.extra||""}
+      <button class="iconbtn ${f?"hot":""}" onclick="toggleFloat('${d.id}')">
+        ${f?"⇲ Dock":"⇱ Undock"}</button>
+    </div><div class="pbody">${d.body}</div></section>`;
+}
+
+function render(){
+  const assign = `<button class="iconbtn" onclick="openMap()">⚙ Assign</button>`;
+  const defs = [
+    {id:"mv",   title:"MULTIVIEW", sub:"2 boxes + 2 quads + 24 sources", body:mvBody(),   extra:assign},
+    {id:"desk", title:"CONSOLE",   sub:"program · preview · transition", body:deskBody(), extra:assign}
+  ];
+  $("#frame").innerHTML  = defs.filter(d=>!floating[d.id]).map(pane).join("");
+  $("#parked").innerHTML = defs.filter(d=> floating[d.id]).map(d=>
+    `<div class="parked">⇱ <b style="color:var(--amber)">${d.title}</b> is on its own window
+      <button class="iconbtn" onclick="toggleFloat('${d.id}')">dock</button></div>`).join("");
+
+  document.querySelectorAll(".float").forEach(f=>f.remove());
+  defs.filter(d=>floating[d.id]).forEach((d,k)=>{
+    const el = document.createElement("div");
+    el.className = "float";
+    el.style.left = (60 + k*44) + "px";
+    el.style.top  = (80 + k*44) + "px";
+    el.innerHTML = pane(d);
+    document.body.appendChild(el);
+    drag(el, el.querySelector(".pbar"));
+  });
+  paintLadders();
+}
+function toggleFloat(id){ floating[id] = !floating[id]; render(); }
+function drag(win,bar){
+  let ox=0, oy=0, on=false;
+  bar.addEventListener("mousedown",e=>{
+    if(e.target.closest("button")) return;
+    on = true; ox = e.clientX - win.offsetLeft; oy = e.clientY - win.offsetTop; e.preventDefault();
+  });
+  addEventListener("mousemove",e=>{ if(!on) return;
+    win.style.left = (e.clientX-ox)+"px"; win.style.top = (e.clientY-oy)+"px"; });
+  addEventListener("mouseup",()=>on=false);
+}
+
+/* ---------------- stav ---------------- */
+function press(bus,i){ if(map[i]==null) return; if(bus==="pgm") pgm=i; else pvw=i; render(); }
+function swap(){ const a=pgm; pgm=pvw; pvw=a; t=0; render(); }
+function cut(){ swap(); }
+function auto(){
+  const el = document.getElementById("rate");
+  const [m,s] = (el?el.value:"0:15").split(":").map(Number);
+  const ms = Math.max(300, ((m||0)*60+(s||0))*1000);
+  const t0 = performance.now(), from = t;
+  (function step(now){
+    const k = Math.min(1,(now-t0)/ms);
+    t = from + (1-from)*k; paintLadders();
+    if(k<1) requestAnimationFrame(step); else swap();
+  })(performance.now());
+}
+
+function paintLadders(){
+  document.querySelectorAll(".ladder").forEach(l=>{
+    if(!l.children.length) l.innerHTML = '<div class="led"></div>'.repeat(26);
+    const leds = [...l.children], n = leds.length, upto = Math.round(t*n);
+    leds.forEach((led,k)=>{
+      if(k >= upto){ led.style.background=""; led.style.boxShadow=""; return; }
+      const f = n>1 ? k/(n-1) : 1;
+      led.style.background = `hsl(34 92% ${34+f*24}%)`;
+      led.style.boxShadow  = `0 0 ${3+f*7}px hsl(34 100% 56% / ${.35+f*.55})`;
+    });
+  });
+  document.querySelectorAll(".track").forEach(track=>{
+    const h = track.querySelector(".handle");
+    h.style.top = (4 + t*(track.clientHeight - h.offsetHeight - 8)) + "px";
+  });
+}
+addEventListener("mousedown",e=>{
+  const track = e.target.closest(".track"); if(!track) return;
+  const move = ev => {
+    const r = track.getBoundingClientRect(), h = track.querySelector(".handle").offsetHeight;
+    t = Math.max(0, Math.min(1, (ev.clientY - r.top - h/2)/(r.height - h - 8)));
+    paintLadders();
+    if(t >= .999) swap();
+  };
+  move(e);
+  const up = () => { removeEventListener("mousemove",move); removeEventListener("mouseup",up); };
+  addEventListener("mousemove",move); addEventListener("mouseup",up);
+});
+
+/* ---------------- assign ---------------- */
+function openMap(){
+  $("#maprow").innerHTML = map.map((cam,i)=>`
+    <div class="mapcell"><div class="k">BTN ${String(i+1).padStart(2,"0")}</div>
+      <select onchange="assign(${i},this.value)">
+        <option value="">— none —</option>
+        ${REAL.map(c=>`<option value="${c}" ${c===cam?"selected":""}>${face(c)}</option>`).join("")}
+      </select></div>`).join("");
+  $("#sheet").classList.add("open");
+}
+function closeMap(){ $("#sheet").classList.remove("open"); }
+function assign(i,v){ map[i] = v ? +v : null; render(); }
+function setLabel(m,el){
+  labelMode = m;
+  [...el.parentNode.querySelectorAll(".mini-seg")].forEach(b=>b.classList.remove("sel"));
+  el.classList.add("sel"); render();
+}
+
+render();
+addEventListener("resize", paintLadders);
+</script>
+
+<script>
+/* Embedded mode.
+   When this page is shown inside the site it is not a demo in a box — it is the
+   page. So its own intro, padding and background step aside, and it reports its
+   height upwards so the parent can give it exactly the room it needs. An iframe
+   with its own scrollbar is the thing that makes an embed feel like a pen. */
+(function(){
+  if(!/(\?|&)embed/.test(location.search)) return;
+  document.documentElement.style.background = "transparent";
+  document.body.style.background = "transparent";
+  const css = document.createElement("style");
+  css.textContent = `.note{display:none!important}
+    .wrap{padding-left:0!important;padding-right:0!important;
+          padding-top:0!important;padding-bottom:8px!important;max-width:none!important}`;
+  document.head.appendChild(css);
+
+  const tell = () => parent.postMessage(
+    {embedHeight: Math.ceil(document.documentElement.scrollHeight), from: location.pathname},
+    "*");
+  addEventListener("load", tell);
+  addEventListener("resize", tell);
+  new MutationObserver(tell).observe(document.body, {subtree:true, childList:true, attributes:true});
+  setInterval(tell, 800);
+})();
+</script>

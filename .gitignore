@@ -1,2 +1,30 @@
 __pycache__/
 *.py[cod]
+.DS_Store
+
+# Swift build products. The shipped app lives in release/, built by
+# OrahControl/make-release.sh — the intermediates do not belong in the repo.
+OrahControl/.build/
+OrahControl/build/
+
+# Self-signed test certificate MediaMTX generates on first run. Regenerated
+# automatically; a private key does not belong in a public repository.
+tools/auto.key
+tools/auto.crt
+
+# Deploy credentials — never commit
+.deploy.env
+
+# Promo, drafts and anything written for a person rather than the code.
+# This repository is public.
+docs/promo/
+promo/
+*.private.md
+
+# Local Claude settings: personal permissions, not project configuration.
+# .claude/settings.json is shared on purpose; this one is not.
+.claude/settings.local.json
+
+# Builds belong in GitHub Releases, not in the tree.
+release/*.zip
+release/*.sha256

@@ -1,0 +1,447 @@
+<meta charset="utf-8">
+<title>Colour Correction</title>
+<style>
+  :root{
+    --bg:#0b0b0c; --panel:#141416; --panel2:#1b1b1e; --line:#2a2a2e;
+    --fg:#e8e8ea; --dim:#8a8a90; --faint:#55555c;
+    --prog:#e0202a; --prev:#2fbf62; --amber:#e8a33d; --amberGlow:#ffc766;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1640px;margin:0 auto;padding:16px 16px 60px}
+  .note{color:var(--dim);font-size:13px;margin:0 0 14px;max-width:90ch}
+  .note b{color:var(--fg);font-weight:600}
+  .lbl{font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);
+       white-space:nowrap}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+
+  /* The signal path, drawn at the top. It is the one thing worth remembering
+     about colour here, so it lives on screen rather than in a manual. */
+  .path{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:10px 12px;
+        margin-bottom:14px;font-size:12px}
+  .node{border:1px solid var(--line);border-radius:7px;padding:6px 11px;background:#0e0e10;
+        color:var(--dim)}
+  .node.cc{border-color:var(--amber);color:var(--amberGlow);background:#1d1913}
+  .node.iso{border-color:var(--prev);color:var(--prev)}
+  .node.out{border-color:var(--prog);color:#ff8a8f}
+  .arr{color:var(--faint)}
+
+  .top{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+  .camtab{position:relative;border:1.5px solid var(--amber);border-radius:8px;cursor:pointer;
+       background:linear-gradient(178deg,#26221a 0%,#1b1813 52%,#221e17 100%);
+       color:var(--amberGlow);padding:8px 12px;
+       font:700 11.5px/1.1 -apple-system,sans-serif;letter-spacing:.1em;text-transform:uppercase;
+       box-shadow:0 2px 3px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,199,102,.2)}
+  .camtab.sel{background:linear-gradient(178deg,#ffd88a,var(--amber));color:#141417;
+       border-color:#ffd88a;box-shadow:0 0 18px rgba(232,163,61,.55)}
+  .camtab.pgm{border-color:#ff8a8f} .camtab.pvw{border-color:#8ff7b8}
+  .camtab i{position:absolute;right:5px;bottom:4px;width:6px;height:6px;border-radius:50%;
+       background:var(--amber);box-shadow:0 0 6px var(--amber)}
+  .camtab.sel i{background:#141417;box-shadow:none}
+  .spacer{flex:1}
+  .iconbtn{background:#232327;border:1px solid var(--line);color:var(--dim);border-radius:6px;
+           padding:6px 11px;font-size:11.5px;cursor:pointer}
+  .iconbtn:hover{color:var(--fg);border-color:#3a3a40}
+  .iconbtn.hot{color:#141417;background:linear-gradient(178deg,#ffd88a,var(--amber));
+               border-color:#4d3208;font-weight:700}
+
+  .stage{display:grid;grid-template-columns:296px 1fr;gap:12px;align-items:start}
+
+  /* ---------- RCP column ----------
+     A shading panel is not a set of sliders. Two controls carry almost all of
+     the work — how bright the picture is and where its blacks sit — and on a
+     real RCP both are under one hand: the lever for exposure, the puck for
+     master black. Everything else is trim. So they get their own column, at a
+     size a hand can find, and the wheels on the right stay for the trim. */
+  .rcp{padding:11px}
+  .shot{position:relative;aspect-ratio:3/4;border-radius:6px;overflow:hidden;background:#000;
+        border:2px solid #1e1e22}
+  .shot .sky{position:absolute;inset:0;
+       background:linear-gradient(158deg,#3a4250 0%,#242a33 42%,#0e1013 100%)}
+  .shot.pgm{border-color:var(--prog)} .shot.pvw{border-color:var(--prev)}
+  .shot .tag{position:absolute;left:6px;top:6px;font:700 8.5px/1 var(--mono);letter-spacing:.1em;
+       padding:3px 6px;border-radius:2px;background:rgba(0,0,0,.7);color:var(--amberGlow)}
+  .shot.pgm .tag{background:var(--prog);color:#fff}
+  .shot.pvw .tag{background:var(--prev);color:#04240f}
+
+  .ab{display:flex;gap:5px;margin:9px 0 11px}
+  .ab button{flex:1;background:#232327;border:1px solid var(--line);color:var(--dim);
+       border-radius:6px;padding:6px 0;font:700 10px/1 var(--mono);letter-spacing:.1em;
+       cursor:pointer}
+  .ab button.sel{background:#2b2419;border-color:#6b4d18;color:var(--amberGlow)}
+
+  .hand{display:grid;grid-template-columns:auto 1fr;gap:11px;align-items:stretch}
+  /* exposure lever, OPEN at the top as on every shading panel */
+  .lever{display:flex;flex-direction:column;align-items:center;gap:6px;width:74px}
+  .levTrack{position:relative;flex:1;width:100%;border-radius:8px;background:#0a0a0b;
+       border:1px solid var(--line);box-shadow:inset 0 0 18px #000;min-height:186px}
+  .levTrack::before{content:"";position:absolute;left:50%;top:12px;bottom:12px;width:4px;
+       transform:translateX(-50%);background:#000;border-radius:2px}
+  .levHandle{position:absolute;left:-9px;right:-9px;height:34px;cursor:grab}
+  .levHandle::before{content:"";position:absolute;inset:0;border-radius:6px;
+       background:linear-gradient(180deg,#ffe0a6 0%,var(--amberGlow) 38%,#c9832a 52%,
+                                  var(--amber) 66%,#8a5a13 100%);
+       border:1px solid #6b4415;
+       box-shadow:0 3px 8px rgba(0,0,0,.85),0 0 16px rgba(232,163,61,.4),
+                  inset 0 1px 0 rgba(255,245,220,.9)}
+  .ticks{position:absolute;left:5px;top:10px;bottom:10px;width:7px;display:flex;
+       flex-direction:column-reverse;gap:2px;justify-content:space-between}
+  .ticks i{height:4px;border-radius:1px;background:#1c1712;display:block}
+
+  /* The puck works in both axes, like the joystick on a real RCP: pushed up and
+     down it moves master black, pushed left and right it bends gamma. One hand,
+     two values, eye never leaving the picture — which is the whole reason a
+     shading panel has a puck instead of two more sliders. */
+  .pad{position:relative;background:#0a0a0b;border:1px solid var(--line);border-radius:8px;
+       box-shadow:inset 0 0 22px #000;cursor:grab;min-height:186px;overflow:hidden}
+  .pad::before,.pad::after{content:"";position:absolute;background:#1e1e22}
+  .pad::before{left:50%;top:8px;bottom:8px;width:1px}
+  .pad::after{top:50%;left:8px;right:8px;height:1px}
+  .puck{position:absolute;width:34px;height:34px;border-radius:50%;
+       transform:translate(-50%,-50%);pointer-events:none;
+       background:radial-gradient(circle at 38% 32%,#ffe9c2,var(--amber) 58%,#7d5112);
+       border:1px solid #6b4415;
+       box-shadow:0 3px 9px rgba(0,0,0,.85),0 0 20px rgba(232,163,61,.55)}
+  .readout{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:10px}
+  .readout div{background:#000;border:1px solid var(--line);border-radius:6px;padding:6px}
+  .readout b{display:block;font:700 12px/1 var(--mono);color:var(--amber);margin-top:3px}
+
+  /* ---------- wheels ---------- */
+  .wheels{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:12px}
+  .wcol{display:flex;flex-direction:column;align-items:center;gap:9px}
+  .wname{font:700 10px/1 var(--mono);letter-spacing:.18em;color:var(--amber);
+         text-transform:uppercase}
+  .wheel{position:relative;width:100%;max-width:206px;aspect-ratio:1;border-radius:50%;
+         cursor:crosshair;
+         background:
+           radial-gradient(circle at 50% 50%, #17171a 0 58%, transparent 58.5%),
+           conic-gradient(from 90deg,
+             #e05a5a,#e0a35a,#d8e05a,#7ae05a,#5ae0a3,#5ad8e0,#5a7ae0,#a35ae0,#e05ad8,#e05a5a);
+         box-shadow:inset 0 0 0 1px #000, 0 2px 8px rgba(0,0,0,.6)}
+  .wheel::after{content:"";position:absolute;inset:18%;border-radius:50%;border:1px solid #232327}
+  .cross{position:absolute;inset:18%;pointer-events:none}
+  .cross::before,.cross::after{content:"";position:absolute;background:#232327}
+  .cross::before{left:50%;top:0;bottom:0;width:1px}
+  .cross::after{top:50%;left:0;right:0;height:1px}
+  .dot{position:absolute;width:13px;height:13px;border-radius:50%;background:#f2f2f4;
+       border:1px solid #000;box-shadow:0 1px 4px rgba(0,0,0,.9);
+       transform:translate(-50%,-50%);pointer-events:none}
+  .master{width:100%;max-width:206px}
+  .nums{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;width:100%;max-width:206px}
+  /* min-width:0 or the four fields refuse to shrink into their columns and the
+     row runs out past the wheel above it. */
+  .nums input{min-width:0;width:100%;background:#000;border:1px solid #303036;
+       border-radius:4px;padding:4px 2px;text-align:center;
+       font:700 10.5px/1 var(--mono);color:var(--fg)}
+  .nums input.r{border-bottom:2px solid #e05a5a}
+  .nums input.g{border-bottom:2px solid #5ae05a}
+  .nums input.b{border-bottom:2px solid #5a7ae0}
+  .nums input.y{border-bottom:2px solid #6b6b75}
+
+  .sliders{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:0 12px 12px}
+  .sl{margin-bottom:10px}
+  .sl .head{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim)}
+  .sl .head b{color:var(--fg);font:700 11.5px/1 var(--mono)}
+  input[type=range]{width:100%;-webkit-appearance:none;background:transparent;margin:5px 0 0}
+  input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;
+       background:linear-gradient(90deg,#2a2a2e,#3a3a40)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;
+       border-radius:50%;margin-top:-5.5px;border:1px solid #6b4415;
+       background:linear-gradient(180deg,#ffe0a6,var(--amber));
+       box-shadow:0 0 8px rgba(232,163,61,.6)}
+
+  .foot{display:flex;gap:8px;padding:11px 12px;border-top:1px solid var(--line);flex-wrap:wrap;
+        align-items:center}
+  .warn{color:var(--amber);font-size:12px}
+  @media(max-width:1100px){.stage{grid-template-columns:1fr}
+    .wheels,.sliders{grid-template-columns:1fr}}
+</style>
+
+<div class="wrap">
+  <p class="note">
+    <b>Design — colour correction.</b> The cameras do not match each other, so correction is
+    <b>per camera</b>, never global. It rides the live path only — preview, program and what
+    leaves for Vahana. <b>Recording stays ISO</b>: exactly what the camera sent, untouched.
+    Nothing here reaches the camera either — the Orah protocol has no exposure or gamma
+    control, so all of it happens in the Metal pass on this machine.
+    The left column is the shading panel — exposure lever and master-black puck, the two
+    controls that do most of the work on an RCP.
+  </p>
+
+  <div class="panel path">
+    <span class="node">camera · 4 lenses</span><span class="arr">→</span>
+    <span class="node">MediaMTX</span><span class="arr">→</span>
+    <span class="node iso">RECORD · ISO — untouched</span>
+    <span style="width:22px"></span>
+    <span class="node">MediaMTX</span><span class="arr">→</span>
+    <span class="node cc">COLOUR · per camera</span><span class="arr">→</span>
+    <span class="node">mix / dissolve</span><span class="arr">→</span>
+    <span class="node out">PREVIEW · PROGRAM · Vahana</span>
+  </div>
+
+  <div class="top" id="tabs"></div>
+
+  <div class="stage">
+    <div class="panel rcp">
+      <div class="lbl" style="margin-bottom:8px">Shading</div>
+      <div class="shot" id="shot"><div class="sky"></div><span class="tag" id="shotTag"></span></div>
+
+      <div class="ab">
+        <button id="abBypass" onclick="setAB(false)">BYPASS</button>
+        <button id="abGraded" class="sel" onclick="setAB(true)">GRADED</button>
+      </div>
+
+      <div class="hand">
+        <div class="lever">
+          <span class="lbl">Open</span>
+          <div class="levTrack" id="levTrack">
+            <div class="ticks" id="ticks"></div>
+            <div class="levHandle" id="levHandle"></div>
+          </div>
+          <span class="lbl">Close</span>
+        </div>
+        <div class="pad" id="pad"><div class="puck" id="puck"></div></div>
+      </div>
+
+      <div class="readout">
+        <div><span class="lbl">Exposure</span><b id="roExp">0.00</b></div>
+        <div><span class="lbl">Gamma</span><b id="roGam">0.00</b></div>
+        <div><span class="lbl">Master black</span><b id="roBlk">0.00</b></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="wheels" id="wheels"></div>
+      <div class="sliders" id="sliders"></div>
+      <div class="foot">
+        <button class="iconbtn" onclick="resetOne()">↺ Reset camera</button>
+        <button class="iconbtn" onclick="copyAll()">Copy to all</button>
+        <button class="iconbtn hot" onclick="savePreset()">Save as preset</button>
+        <span class="spacer"></span>
+        <span class="warn" id="warn"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const REAL  = [4,5,7,2,9,12,3,6,10,20,21,22,24];
+const NAMES = {2:"Stage L",3:"Stage R",4:"Front",5:"Front L",6:"Crowd",7:"Front R",
+               9:"Drums",10:"Wide",12:"Bar",20:"Balcony",21:"Backstage",22:"Roof",24:"Spare"};
+const PGM = 4, PVW = 5;                       // what is on the buses
+
+const blank = () => ({
+  exposure:0, black:0, gam:0,
+  lift:{r:0,g:0,b:0,y:0}, gamma:{r:0,g:0,b:0,y:0}, gain:{r:1,g:1,b:1,y:1},
+  contrast:50, pivot:.50, saturation:50, lumMix:100, hue:180, tint:0
+});
+const state = {};
+REAL.forEach(c => state[c] = blank());
+state[4].gamma = {r:.04,g:0,b:-.03,y:.02}; state[4].saturation = 56; state[4].exposure = .18;
+state[9].gain  = {r:1.06,g:1,b:.94,y:1.02}; state[9].black = -.06; state[9].gam = .09;
+state[20].lift = {r:-.02,g:0,b:.03,y:0};    state[20].exposure = -.11; state[20].gam = -.07;
+
+let cam = 4, showGraded = true;
+const $ = s => document.querySelector(s);
+const S = () => state[cam];
+const touched = c => JSON.stringify(state[c]) !== JSON.stringify(blank());
+
+const WHEELS = [
+  {k:"lift",  n:"Lift",  min:-.5, max:.5, base:0},
+  {k:"gamma", n:"Gamma", min:-.5, max:.5, base:0},
+  {k:"gain",  n:"Gain",  min:0,   max:2,  base:1}
+];
+const SLIDERS = [
+  [{k:"contrast",  n:"Contrast",   min:0,  max:100, step:1,   suf:"%"},
+   {k:"pivot",     n:"Pivot",      min:0,  max:1,   step:.01, suf:""}],
+  [{k:"saturation",n:"Saturation", min:0,  max:100, step:1,   suf:"%"},
+   {k:"lumMix",    n:"Lum Mix",    min:0,  max:100, step:1,   suf:"%"}],
+  [{k:"hue",       n:"Hue",        min:0,  max:360, step:1,   suf:"°"},
+   {k:"tint",      n:"Tint",       min:-50,max:50,  step:1,   suf:""}]
+];
+
+function drawTabs(){
+  $("#tabs").innerHTML = REAL.map(c=>{
+    const cls = [c===cam?"sel":"", c===PGM?"pgm":"", c===PVW?"pvw":""].join(" ");
+    return `<button class="camtab ${cls}" onclick="cam=${c};draw()">
+      ${NAMES[c]}${touched(c)?"<i></i>":""}</button>`;
+  }).join("") + `<span class="spacer"></span>
+    <span class="lbl">${REAL.filter(touched).length} of ${REAL.length} cameras graded</span>`;
+}
+
+/* Exposure runs OPEN at the top to CLOSE at the bottom, which is the way round
+   every shading panel has it — a hand that has done this before must not have
+   to think about which way is brighter. */
+function drawLever(){
+  const tr = $("#levTrack"), h = $("#levHandle"), ti = $("#ticks");
+  if(!ti.children.length) ti.innerHTML = '<i></i>'.repeat(18);
+  const v = (1 - (S().exposure + 1) / 2);                 // 0 = open (top)
+  h.style.top = (v * (tr.clientHeight - h.offsetHeight)) + "px";
+  const lit = Math.round((1 - v) * ti.children.length);
+  [...ti.children].forEach((el,k)=>{
+    if(k >= lit){ el.style.background = ""; el.style.boxShadow = ""; return; }
+    const f = k / (ti.children.length - 1);
+    el.style.background = `hsl(34 92% ${34 + f*24}%)`;
+    el.style.boxShadow  = `0 0 ${2 + f*6}px hsl(34 100% 56% / ${.3 + f*.5})`;
+  });
+  $("#roExp").textContent = (S().exposure >= 0 ? "+" : "") + S().exposure.toFixed(2);
+}
+function drawPad(){
+  const p = $("#puck"), v = S();
+  p.style.left = (50 + v.gam  * 45) + "%";
+  p.style.top  = (50 - v.black * 45) + "%";
+  const sign = x => (x >= 0 ? "+" : "") + x.toFixed(2);
+  $("#roBlk").textContent = sign(v.black);
+  $("#roGam").textContent = sign(v.gam);
+}
+
+function drawWheels(){
+  $("#wheels").innerHTML = WHEELS.map(w=>{
+    const v = S()[w.k], span = w.max - w.min;
+    const x = 50 + ((v.r - v.b) / span) * 90;
+    const y = 50 - ((v.g - w.base) / span) * 90;
+    const num = (key,cls) => `<input class="${cls}" value="${v[key].toFixed(2)}"
+        onchange="setNum('${w.k}','${key}',this.value)">`;
+    return `<div class="wcol"><span class="wname">${w.n}</span>
+      <div class="wheel" onmousedown="grab(event,'${w.k}',${w.min},${w.max},${w.base})">
+        <div class="cross"></div><div class="dot" style="left:${x}%;top:${y}%"></div></div>
+      <input class="master" type="range" min="${w.min}" max="${w.max}" step="0.01"
+             value="${v.y}" oninput="setNum('${w.k}','y',this.value)">
+      <div class="nums">${num("y","y")}${num("r","r")}${num("g","g")}${num("b","b")}</div>
+    </div>`;
+  }).join("");
+}
+
+function drawSliders(){
+  $("#sliders").innerHTML = SLIDERS.map(col =>
+    `<div>` + col.map(s=>{
+      const v = S()[s.k];
+      const shown = s.max <= 1 ? v.toFixed(2) : Math.round(v) + s.suf;
+      return `<div class="sl"><div class="head"><span>${s.n}</span><b>${shown}</b></div>
+        <input type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${v}"
+               oninput="setVal('${s.k}',this.value)"></div>`;
+    }).join("") + `</div>`
+  ).join("");
+}
+
+function drawShot(){
+  const el = $("#shot");
+  el.className = "shot " + (cam===PGM ? "pgm" : cam===PVW ? "pvw" : "");
+  $("#shotTag").textContent = cam===PGM ? "ON AIR" : cam===PVW ? "PREVIEW" : NAMES[cam];
+  const s = S(), sky = el.querySelector(".sky");
+  if(!showGraded){ sky.style.filter = ""; return; }
+  // Indicative only. The real picture is computed in Metal, in the same pass
+  // that already runs the dissolve.
+  const bright = 1 + s.exposure * .55 + s.gam * .35 + s.gamma.y + s.lift.y * .5;
+  const sat = s.saturation / 50;
+  const con = .5 + s.contrast / 100 - s.black * .4;
+  const rot = (s.hue - 180) * .12 + (s.gain.r - s.gain.b) * 40;
+  sky.style.filter = `brightness(${Math.max(.15,bright).toFixed(3)}) saturate(${sat.toFixed(2)})
+     contrast(${con.toFixed(2)}) hue-rotate(${rot.toFixed(1)}deg)`;
+}
+
+function setNum(w,k,v){ S()[w][k] = parseFloat(v) || 0; draw(); }
+function setVal(k,v){ S()[k] = parseFloat(v); draw(); }
+function setAB(on){
+  showGraded = on;
+  $("#abGraded").classList.toggle("sel", on);
+  $("#abBypass").classList.toggle("sel", !on);
+  drawShot();
+}
+function grab(e,w,min,max,base){
+  const el = e.currentTarget, span = max - min;
+  const move = ev => {
+    const r = el.getBoundingClientRect();
+    const dx = (ev.clientX - r.left - r.width/2) / (r.width/2);
+    const dy = (ev.clientY - r.top - r.height/2) / (r.height/2);
+    const v = S();
+    v[w].r = +(base + ( dx*.5 - dy*.5) * span/2).toFixed(3);
+    v[w].b = +(base + (-dx*.5 - dy*.5) * span/2).toFixed(3);
+    v[w].g = +(base + (-dy*.5) * span/2).toFixed(3);
+    draw();
+  };
+  move(e);
+  const up = () => { removeEventListener("mousemove",move); removeEventListener("mouseup",up); };
+  addEventListener("mousemove",move); addEventListener("mouseup",up);
+}
+
+/* Lever and puck are dragged, never typed. That is the point of them: the eye
+   stays on the picture while the hand moves. The read-outs underneath are for
+   writing a number down afterwards, not for setting one. */
+addEventListener("mousedown", e => {
+  const tr = e.target.closest("#levTrack");
+  if(tr){
+    const h = $("#levHandle");
+    const move = ev => {
+      const r = tr.getBoundingClientRect();
+      const p = Math.max(0, Math.min(1, (ev.clientY - r.top - h.offsetHeight/2)
+                                        / (r.height - h.offsetHeight)));
+      S().exposure = +((1 - p) * 2 - 1).toFixed(2);
+      draw();
+    };
+    move(e);
+    const up = () => { removeEventListener("mousemove",move); removeEventListener("mouseup",up); };
+    addEventListener("mousemove",move); addEventListener("mouseup",up);
+    return;
+  }
+  const pad = e.target.closest("#pad");
+  if(pad){
+    const move = ev => {
+      const r = pad.getBoundingClientRect();
+      const y = Math.max(-1, Math.min(1, ((r.top + r.height/2) - ev.clientY) / (r.height/2)));
+      const x = Math.max(-1, Math.min(1, (ev.clientX - (r.left + r.width/2)) / (r.width/2)));
+      S().black = +(y * .5).toFixed(2);
+      S().gam   = +(x * .5).toFixed(2);
+      draw();
+    };
+    move(e);
+    const up = () => { removeEventListener("mousemove",move); removeEventListener("mouseup",up); };
+    addEventListener("mousemove",move); addEventListener("mouseup",up);
+  }
+});
+
+function resetOne(){ state[cam] = blank(); draw(); }
+function copyAll(){
+  const src = JSON.stringify(S());
+  REAL.forEach(c => state[c] = JSON.parse(src));
+  $("#warn").textContent = NAMES[cam] + " is now on every camera.";
+  draw();
+}
+function savePreset(){
+  $("#warn").textContent = "Saved as a preset — recalled on the next start.";
+  draw();
+}
+
+function draw(){ drawTabs(); drawWheels(); drawSliders(); drawShot(); drawLever(); drawPad(); }
+draw();
+addEventListener("resize", () => { drawLever(); drawPad(); });
+</script>
+
+<script>
+/* Embedded mode.
+   When this page is shown inside the site it is not a demo in a box — it is the
+   page. So its own intro, padding and background step aside, and it reports its
+   height upwards so the parent can give it exactly the room it needs. An iframe
+   with its own scrollbar is the thing that makes an embed feel like a pen. */
+(function(){
+  if(!/(\?|&)embed/.test(location.search)) return;
+  document.documentElement.style.background = "transparent";
+  document.body.style.background = "transparent";
+  const css = document.createElement("style");
+  css.textContent = `.note{display:none!important}
+    .wrap{padding-left:0!important;padding-right:0!important;
+          padding-top:0!important;padding-bottom:8px!important;max-width:none!important}`;
+  document.head.appendChild(css);
+
+  const tell = () => parent.postMessage(
+    {embedHeight: Math.ceil(document.documentElement.scrollHeight), from: location.pathname},
+    "*");
+  addEventListener("load", tell);
+  addEventListener("resize", tell);
+  new MutationObserver(tell).observe(document.body, {subtree:true, childList:true, attributes:true});
+  setInterval(tell, 800);
+})();
+</script>

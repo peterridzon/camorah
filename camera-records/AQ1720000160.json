@@ -1,0 +1,34 @@
+{
+  "audioChannels": 4,
+  "audioGainsDB": [
+    20,
+    20,
+    20,
+    20
+  ],
+  "calibrationBytes": 6845,
+  "calibrationFile": "20260816T091324_factoryPresetsProject.ptv",
+  "cameraClockUnix": 165,
+  "cameraName": "My 360 Camera",
+  "checkedAt": "2026-08-16T09:13:11Z",
+  "clockOffsetSeconds": -1786871438,
+  "firmware": "1.50.23",
+  "hardware": "01A",
+  "host": "192.168.0.179",
+  "mode": "idle",
+  "model": "Atlas360",
+  "notes": [
+    "stream: control plane is healthy after Cam.RESTART (STOP answers NO_VIDEO_RUNNING normally), but START takes ~28s and then answers UNKNOWN_ERROR, against 2-7s on working units. That is an internal timeout bringing up the video pipeline, not a refused command. Unchanged across a power cycle (23:03), a Cam.RESTART (23:53) and an app restart. Sensors or encoder. Next step is the stitching box. 2026-08-16.",
+    "box: operator recalls (uncertain, 2026-08-17): these units were already tried in the stitching box and could not be reflashed. Marked on the units as running only with system 1.1.2. If that holds, the box route - the only way a camera can be flashed at all - is already exhausted. Worth confirming whether the box failed to SEE them or saw them and the upgrade failed; those mean different things."
+  ],
+  "number": 11,
+  "packetLossPercent": 0,
+  "port": 9989,
+  "rememberedStreamURLs": [],
+  "roundTripMilliseconds": 5.873,
+  "sensors": 4,
+  "serial": "AQ1720000160",
+  "serviceName": "Atlas360@AQ1720000160",
+  "socs": 2,
+  "verdict": "SERVICE"
+}

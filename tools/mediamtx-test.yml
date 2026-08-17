@@ -1,0 +1,34 @@
+# MediaMTX for local development — stands in for a recording node.
+# Paths are created on demand so the simulator can publish anything.
+
+logLevel: info
+logDestinations: [stdout]
+
+rtmp: yes
+rtmpAddress: :1935
+
+api: yes
+apiAddress: :9997
+
+hls: no
+webrtc: no
+srt: no
+rtsp: no
+
+# Keep buffering minimal; we are measuring latency through this thing.
+writeQueueSize: 512
+
+# The Orah's two SoCs open their RTMP connections well before they send the
+# publish command — measured at more than the 10s default, which silently drops
+# half the camera's streams.
+readTimeout: 30s
+writeTimeout: 30s
+
+pathDefaults:
+  source: publisher
+
+# Accept any path name. Without this catch-all MediaMTX rejects publishers with
+# "path is not configured" — the real deployment generates explicit camNN paths,
+# but for development anything the simulator invents should just work.
+paths:
+  all_others:

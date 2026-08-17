@@ -1,0 +1,860 @@
+<meta charset="utf-8">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml"><title>Orah Live Studio — interface design</title>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Amber phosphor. One committed visual world — black ground, a single hue.
+   Because the palette is monochrome, state is carried by WEIGHT, not colour:
+   solid fill = on air, outline = preview, dim = idle, grey = dead.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --ground:  #0A0906;
+  --panel:   #121009;
+  --raised:  #1A170D;
+  --sunk:    #060503;
+  --line:    #2B2614;
+  --line-hi: #423918;
+
+  --am-max:  #FFCC33;   /* on air, peak values */
+  --am-hi:   #F0B429;   /* preview, active */
+  --fg:      #E9C765;   /* body text */
+  --fg-dim:  #A2822F;   /* secondary */
+  --fg-mute: #74601F;   /* labels */
+  --fg-faint:#4E4014;   /* hairline text */
+  --dead:    #3A382F;   /* offline, no signal — desaturated on purpose */
+
+  /* Reserved strictly for tally. Nothing else in the app may use these two. */
+  --program: #F5453D;   /* on air */
+  --preview: #2FBE6A;   /* next up */
+
+  --mono: ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --glow: 0 0 14px rgba(255,204,51,.30);
+}
+
+* { box-sizing:border-box; }
+body { margin:0; background:var(--ground); color:var(--fg);
+       font-family:var(--sans); font-size:16px; line-height:1.6;
+       -webkit-font-smoothing:antialiased; }
+
+.wrap { max-width:1280px; margin:0 auto; padding:56px 24px 96px;
+        display:flex; flex-direction:column; gap:42px; }
+
+/* ── page type ──────────────────────────────────────────────────────────── */
+.eyebrow { font-family:var(--mono); font-size:11px; letter-spacing:.18em;
+           text-transform:uppercase; color:var(--fg-mute); }
+h1 { margin:0; font-family:var(--mono); font-size:clamp(28px,4.2vw,44px);
+     line-height:1.1; letter-spacing:-.01em; font-weight:700; color:var(--am-max);
+     text-shadow:var(--glow); text-wrap:balance; }
+.lede { margin:0; max-width:64ch; font-size:17px; color:var(--fg-dim); }
+.head { display:flex; flex-direction:column; gap:14px; }
+.note { border-left:2px solid var(--line-hi); padding:2px 0 2px 16px;
+        max-width:68ch; font-size:15px; color:var(--fg-dim); }
+.note strong { color:var(--fg); font-weight:600; }
+
+.sec { display:flex; flex-direction:column; gap:18px; }
+.sec > h2 { margin:0; font-family:var(--mono); font-size:12px; letter-spacing:.16em;
+            text-transform:uppercase; color:var(--fg-mute); font-weight:600;
+            padding-bottom:10px; border-bottom:1px solid var(--line); }
+
+/* ── window ─────────────────────────────────────────────────────────────── */
+.win { border-radius:10px; overflow:hidden; background:var(--ground);
+       border:1px solid var(--line); container-type:inline-size;
+       box-shadow:0 24px 60px -18px #000, 0 0 0 1px rgba(255,204,51,.04); }
+.wbar { height:36px; background:var(--panel); border-bottom:1px solid var(--line);
+        display:flex; align-items:center; padding:0 13px; gap:8px; }
+.wdot { width:10px; height:10px; border-radius:50%; border:1px solid var(--line-hi);
+        background:var(--raised); }
+.wtitle { flex:1; text-align:center; font-family:var(--mono); font-size:11px;
+          letter-spacing:.16em; color:var(--fg-mute); text-transform:uppercase;
+          margin-right:50px; }
+
+/* ── status strip ───────────────────────────────────────────────────────── */
+.strip { display:flex; align-items:center; gap:20px; padding:9px 16px;
+         background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.stat { display:flex; align-items:center; gap:7px; font-family:var(--mono);
+        font-size:11px; letter-spacing:.08em; color:var(--fg-mute);
+        text-transform:uppercase; }
+.stat b { color:var(--fg); font-weight:700; font-variant-numeric:tabular-nums; }
+.stat.alert b { color:var(--am-max); text-shadow:var(--glow); }
+.sp { flex:1; }
+
+.led { width:7px; height:7px; border-radius:50%; flex:none; }
+.led.ok   { background:var(--am-hi); box-shadow:0 0 7px rgba(240,180,41,.55); }
+.led.warn { background:var(--am-max); box-shadow:var(--glow);
+            animation:blink 1.6s ease-in-out infinite; }
+.led.bad  { background:var(--dead); }
+.led.rec  { background:var(--program); box-shadow:0 0 8px rgba(245,69,61,.7);
+            animation:blink 1.6s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.28} }
+
+.recbadge { display:flex; align-items:center; gap:8px; padding:4px 11px;
+            border-radius:4px; background:rgba(245,69,61,.10);
+            border:1px solid var(--program); color:#FF7A73;
+            font-family:var(--mono); font-size:11px; letter-spacing:.12em;
+            font-weight:700; font-variant-numeric:tabular-nums; }
+
+/* ── body ───────────────────────────────────────────────────────────────── */
+.body { display:grid; grid-template-columns:minmax(0,1fr) 250px; gap:1px;
+        background:var(--line); }
+.main { background:var(--ground); padding:14px; display:flex; flex-direction:column;
+        gap:14px; min-width:0; }
+.rail { background:var(--panel); padding:14px 12px; display:flex;
+        flex-direction:column; gap:16px; }
+@container (max-width:860px) { .body { grid-template-columns:1fr; } }
+
+.rlabel { display:flex; align-items:center; gap:9px; font-family:var(--mono);
+          font-size:10px; letter-spacing:.16em; text-transform:uppercase;
+          color:var(--fg-faint); margin-bottom:8px; }
+.rlabel .rule { flex:1; height:1px; background:var(--line); }
+.mark { flex:none; width:16px; height:16px; border-radius:50%; background:var(--line-hi);
+        color:var(--am-max); font-family:var(--mono); font-size:10px; font-weight:700;
+        display:grid; place-items:center; line-height:1; }
+
+/* ── PREVIEW → TAKE → PROGRAM ───────────────────────────────────────────── */
+.desk { display:grid; grid-template-columns:1fr 176px 1fr; gap:12px; align-items:stretch; }
+@container (max-width:700px) { .desk { grid-template-columns:1fr; } }
+
+.mon { border-radius:6px; overflow:hidden; background:#000; position:relative;
+       border:2px solid var(--line-hi); }
+.mon.pre { border-color:var(--preview); box-shadow:0 0 22px -8px rgba(47,190,106,.5); }
+.mon.pgm { border-color:var(--program); box-shadow:0 0 26px -6px rgba(245,69,61,.5); }
+
+.view { aspect-ratio:16/9; position:relative; }
+/* faint scanlines — a monitor, not a web panel */
+.view::after { content:""; position:absolute; inset:0; pointer-events:none;
+  background:repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.22) 2px 3px); }
+
+.mtag { position:absolute; top:9px; left:9px; padding:3px 9px; border-radius:3px;
+        font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:.16em;
+        z-index:2; }
+.mtag.pre { border:1px solid var(--preview); color:var(--preview); background:rgba(0,0,0,.65); }
+.mtag.pgm { background:var(--program); color:#fff; box-shadow:0 0 14px rgba(245,69,61,.45); }
+
+.mid { position:absolute; top:9px; right:9px; padding:3px 9px; border-radius:3px;
+       background:rgba(0,0,0,.65); color:var(--fg); font-family:var(--mono);
+       font-size:10.5px; letter-spacing:.06em; z-index:2; }
+.mfoot { position:absolute; bottom:0; left:0; right:0; display:flex; gap:12px;
+         padding:6px 10px; background:linear-gradient(transparent,rgba(0,0,0,.9) 45%);
+         font-family:var(--mono); font-size:9.5px; letter-spacing:.06em;
+         color:var(--fg-dim); z-index:2; font-variant-numeric:tabular-nums; flex-wrap:wrap; }
+
+.takecol { display:flex; flex-direction:column; gap:8px; justify-content:center; }
+.takerow { display:flex; gap:7px; flex:1; min-height:104px; }
+.take { flex:1; border-radius:6px; border:1px solid var(--program);
+        background:var(--program); color:#fff; font-family:var(--mono);
+        font-size:15px; font-weight:700; letter-spacing:.22em; display:grid;
+        place-items:center; cursor:default;
+        box-shadow:0 0 26px -6px rgba(245,69,61,.6), inset 0 -3px 0 rgba(0,0,0,.28); }
+/* T-bar — manual transition, draggable, bindable to a MIDI fader */
+.tbar { width:58px; border:1px solid var(--line-hi); border-radius:6px;
+        background:var(--sunk); display:flex; flex-direction:column;
+        align-items:center; gap:6px; padding:8px 0 7px; }
+.tbar .end { font-family:var(--mono); font-size:7.5px; letter-spacing:.14em;
+             color:var(--fg-mute); }
+.tbar .trk { flex:1; width:8px; border-radius:4px; background:var(--line);
+             position:relative; margin:2px 0; }
+.tbar .fill { position:absolute; left:0; right:0; bottom:0; border-radius:4px;
+              background:linear-gradient(0deg,var(--am-hi),rgba(240,180,41,.15)); }
+.tbar .hnd { position:absolute; left:50%; transform:translateX(-50%);
+             width:42px; height:18px; border-radius:3px;
+             background:linear-gradient(180deg,var(--am-max),var(--am-hi));
+             border:1px solid var(--am-max); box-shadow:0 0 14px rgba(255,204,51,.5);
+             display:grid; place-items:center; }
+.tbar .hnd::after { content:""; width:20px; height:1px; background:rgba(0,0,0,.5);
+                    box-shadow:0 4px 0 rgba(0,0,0,.5),0 -4px 0 rgba(0,0,0,.5); }
+
+.tsub { font-family:var(--mono); font-size:9px; letter-spacing:.12em;
+        color:var(--fg-faint); text-align:center; text-transform:uppercase; }
+.tsel { display:flex; gap:4px; }
+.tsel span { flex:1; padding:4px 0; border-radius:3px; border:1px solid var(--line);
+             background:var(--raised); font-family:var(--mono); font-size:9px;
+             color:var(--fg-mute); text-align:center; letter-spacing:.08em; }
+.tsel span.on { border-color:var(--am-hi); color:var(--am-hi); background:rgba(240,180,41,.1); }
+
+/* ── multiview ──────────────────────────────────────────────────────────── */
+.lensbar { display:flex; align-items:center; gap:6px; margin-left:auto; }
+.lens { padding:3px 9px; border-radius:3px; border:1px solid var(--line);
+        background:var(--raised); font-family:var(--mono); font-size:9.5px;
+        color:var(--fg-mute); letter-spacing:.08em; }
+.lens.on { border-color:var(--am-hi); color:var(--am-hi); background:rgba(240,180,41,.1); }
+
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(128px,1fr)); gap:7px; }
+.tile { padding:0; border:1px solid var(--line); border-radius:4px; overflow:hidden;
+        background:var(--panel); position:relative; cursor:default; text-align:left;
+        font:inherit; color:inherit; }
+.tile.ready   { border-color:#39311A; }
+.tile.preview { border-color:var(--preview); box-shadow:0 0 0 1px var(--preview); }
+.tile.onair   { border-color:var(--program);
+                box-shadow:0 0 0 1px var(--program), 0 0 18px -5px rgba(245,69,61,.65); }
+.tile.offline { opacity:.42; }
+
+.thumb { aspect-ratio:16/9; position:relative; background:#080704; }
+/* monochrome amber scenes — different compositions, one hue */
+.g0 { background:radial-gradient(ellipse 65% 70% at 32% 66%,rgba(255,204,51,.30),transparent 62%),linear-gradient(160deg,#211B0C,#0A0805 74%); }
+.g1 { background:radial-gradient(ellipse 55% 60% at 66% 36%,rgba(255,204,51,.22),transparent 60%),linear-gradient(198deg,#1B1709,#090804 76%); }
+.g2 { background:radial-gradient(ellipse 80% 45% at 48% 78%,rgba(255,204,51,.26),transparent 64%),linear-gradient(140deg,#1E1A0B,#0A0905 74%); }
+.g3 { background:radial-gradient(ellipse 45% 75% at 74% 54%,rgba(255,204,51,.18),transparent 58%),linear-gradient(220deg,#241D0D,#0B0905 72%); }
+.g4 { background:radial-gradient(ellipse 70% 50% at 40% 42%,rgba(255,204,51,.24),transparent 60%),linear-gradient(172deg,#1C180A,#090704 76%); }
+.g5 { background:radial-gradient(ellipse 60% 65% at 58% 62%,rgba(255,204,51,.15),transparent 58%),linear-gradient(206deg,#191509,#080703 76%); }
+
+.nosig { position:absolute; inset:0; display:grid; place-items:center;
+         background:repeating-linear-gradient(45deg,#121009 0 8px,#161309 8px 16px);
+         font-family:var(--mono); font-size:8.5px; letter-spacing:.18em; color:var(--dead); }
+
+.tflag { position:absolute; top:5px; left:5px; padding:2px 6px; border-radius:2px;
+         font-family:var(--mono); font-size:8px; font-weight:700; letter-spacing:.12em;
+         z-index:3; }
+.tflag.air { background:var(--program); color:#fff; }
+.tflag.pre { border:1px solid var(--preview); color:var(--preview); background:rgba(0,0,0,.7); }
+
+.tbar { display:flex; align-items:center; gap:6px; padding:5px 7px;
+        background:var(--raised); border-top:1px solid var(--line); }
+.slot { font-family:var(--mono); font-size:11px; font-weight:700; color:var(--fg);
+        font-variant-numeric:tabular-nums; }
+.nm { flex:1; min-width:0; font-family:var(--mono); font-size:9.5px; color:var(--fg-mute);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:.02em; }
+.rdot { width:5px; height:5px; border-radius:50%; background:var(--program); flex:none;
+        animation:blink 1.6s ease-in-out infinite; }
+
+/* ── rail ───────────────────────────────────────────────────────────────── */
+.grp { display:flex; flex-direction:column; gap:7px; }
+.gh { display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:10px;
+      letter-spacing:.16em; text-transform:uppercase; color:var(--fg-faint); }
+.gh .rule { flex:1; height:1px; background:var(--line); }
+
+.btn { display:flex; align-items:center; justify-content:center; gap:7px; padding:8px 11px;
+       border-radius:4px; border:1px solid var(--line-hi); background:var(--raised);
+       color:var(--fg); font-family:var(--mono); font-size:11px; letter-spacing:.08em;
+       text-transform:uppercase; cursor:default; }
+.btn.go { border-color:var(--am-hi); color:var(--am-hi); background:rgba(240,180,41,.09); }
+.btn.recon { background:rgba(245,69,61,.10); border-color:var(--program);
+             color:#FF7A73; font-weight:700; }
+
+.kv { display:flex; align-items:center; gap:7px; padding:6px 8px; border-radius:4px;
+      background:var(--raised); border:1px solid var(--line); font-family:var(--mono);
+      font-size:10px; letter-spacing:.04em; }
+.kv .k { flex:1; color:var(--fg-dim); text-transform:uppercase; }
+.kv .v { color:var(--fg); font-variant-numeric:tabular-nums; }
+
+.slider { display:flex; flex-direction:column; gap:5px; padding:7px 8px; border-radius:4px;
+          background:var(--raised); border:1px solid var(--line); }
+.srow { display:flex; align-items:baseline; gap:6px; font-family:var(--mono); font-size:10px;
+        letter-spacing:.06em; color:var(--fg-dim); text-transform:uppercase; }
+.srow .v { margin-left:auto; font-size:11px; color:var(--am-max); font-weight:700;
+           font-variant-numeric:tabular-nums; text-transform:none; }
+.track { height:3px; border-radius:2px; background:var(--line); position:relative; }
+.track i { position:absolute; inset:0 auto 0 0; background:var(--am-hi); border-radius:2px; }
+.track u { position:absolute; top:50%; width:9px; height:9px; margin:-4.5px 0 0 -4.5px;
+           border-radius:50%; background:var(--am-max); box-shadow:var(--glow); }
+
+.nodes { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+.nchip { display:flex; align-items:center; gap:5px; padding:4px 6px; border-radius:3px;
+         background:var(--raised); border:1px solid var(--line); font-family:var(--mono);
+         font-size:9px; letter-spacing:.03em; }
+.nchip b { color:var(--fg); font-weight:700; }
+.nchip span:last-child { color:var(--fg-faint); font-variant-numeric:tabular-nums; }
+.nchip.warn { border-color:var(--am-max); }
+.nchip.warn span:last-child { color:var(--am-max); }
+.nchip.bad { border-color:var(--line-hi); opacity:.55; }
+.nchip.bad span:last-child { color:var(--dead); }
+
+.learn { padding:6px 8px; border-radius:4px; border:1px dashed var(--line-hi);
+         font-family:var(--mono); font-size:9.5px; letter-spacing:.1em;
+         color:var(--fg-faint); text-align:center; text-transform:uppercase; }
+
+/* ── signal chain ───────────────────────────────────────────────────────── */
+.chain { border-top:1px solid var(--line); background:var(--panel); padding:11px 14px 13px; }
+.crow { display:flex; align-items:stretch; gap:8px; overflow-x:auto; padding-bottom:3px; }
+.cbox { flex:1; min-width:118px; border:1px solid var(--line); border-radius:4px;
+        background:var(--raised); padding:8px 9px; display:flex; flex-direction:column; gap:4px; }
+.cbox .t { font-family:var(--mono); font-size:9.5px; letter-spacing:.11em; color:var(--fg-mute);
+           text-transform:uppercase; display:flex; align-items:center; gap:5px; }
+.cbox .v { font-family:var(--mono); font-size:11px; color:var(--fg);
+           font-variant-numeric:tabular-nums; }
+.cbox .s { font-family:var(--mono); font-size:9px; color:var(--fg-faint); letter-spacing:.04em; }
+.arr { flex:none; align-self:center; color:var(--line-hi); font-size:13px; }
+
+/* ── annotations ────────────────────────────────────────────────────────── */
+.keys { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:1px;
+        background:var(--line); border:1px solid var(--line); border-radius:6px;
+        overflow:hidden; }
+.key { background:var(--panel); padding:17px 19px; display:flex; gap:13px; }
+.key .n { flex:none; width:21px; height:21px; border-radius:50%; background:var(--am-max);
+          color:var(--sunk); font-family:var(--mono); font-size:11px; font-weight:700;
+          display:grid; place-items:center; margin-top:1px; }
+.key h3 { margin:0 0 5px; font-size:14.5px; font-weight:620; color:var(--fg);
+          letter-spacing:-.005em; }
+.key p { margin:0; font-size:14px; color:var(--fg-dim); }
+.key .fix { display:inline-block; margin-top:8px; font-family:var(--mono); font-size:9.5px;
+            letter-spacing:.1em; text-transform:uppercase; color:var(--fg-mute);
+            border:1px solid var(--line-hi); border-radius:2px; padding:2px 6px; }
+
+.legend { display:flex; flex-wrap:wrap; gap:12px 26px; padding:16px 18px;
+          border:1px solid var(--line); border-radius:6px; background:var(--panel); }
+.lg { display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--fg-dim); }
+.lg .sw { width:26px; height:15px; border-radius:3px; flex:none; }
+.lg b { color:var(--fg); font-weight:600; }
+
+
+/* ── recording matrix ───────────────────────────────────────────────────── */
+.mtx { display:grid; grid-template-columns:repeat(auto-fit,minmax(322px,1fr)); gap:7px; }
+.nblk { border:1px solid var(--line); border-radius:5px; background:var(--panel); overflow:hidden; }
+.nblk.sel { border-color:var(--am-max); box-shadow:0 0 0 1px var(--am-max); }
+.nblk.off { opacity:.45; }
+.nhead { display:flex; align-items:center; gap:7px; padding:6px 8px; background:var(--raised);
+         border-bottom:1px solid var(--line); font-family:var(--mono); font-size:9.5px;
+         letter-spacing:.05em; }
+.nhead b { color:var(--fg); font-weight:700; }
+.nhead .free { color:var(--fg-faint); font-variant-numeric:tabular-nums; }
+.nhead .acts { margin-left:auto; display:flex; gap:4px; }
+.nhead .acts span { padding:2px 6px; border:1px solid var(--line-hi); border-radius:2px;
+                    color:var(--fg-mute); font-size:8px; letter-spacing:.11em; }
+.nhead .acts span.on { border-color:var(--am-max); color:var(--am-max); }
+.mrow { display:flex; align-items:center; gap:8px; padding:5px 8px;
+        border-top:1px solid #1B180D; font-family:var(--mono); font-size:9.5px; }
+.mrow .cid { color:var(--fg); font-weight:700; font-variant-numeric:tabular-nums; }
+.mrow .cnm { flex:1; color:var(--fg-mute); white-space:nowrap; overflow:hidden;
+             text-overflow:ellipsis; }
+.cells { display:flex; gap:3px; flex:none; }
+.cell { width:17px; height:12px; border-radius:2px; border:1px solid var(--line-hi);
+        background:var(--sunk); }
+.cell.rec  { background:var(--program); border-color:var(--program); }
+.cell.fail { background:repeating-linear-gradient(45deg,#2B2614 0 3px,#12100A 3px 6px);
+             border-color:var(--am-max); }
+.mkey { display:flex; flex-wrap:wrap; gap:8px 20px; font-family:var(--mono); font-size:9px;
+        letter-spacing:.06em; color:var(--fg-faint); padding-top:4px; }
+.mkey b { display:inline-block; width:15px; height:10px; border-radius:2px;
+          vertical-align:-1px; margin-right:5px; }
+
+/* ── audio ──────────────────────────────────────────────────────────────── */
+.arow { display:flex; align-items:center; gap:9px; flex-wrap:wrap; padding:8px 10px;
+        background:var(--raised); border:1px solid var(--line); border-radius:5px;
+        font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; color:var(--fg-mute); }
+.sel2 { padding:3px 9px; border:1px solid var(--line-hi); border-radius:3px;
+        background:var(--panel); color:var(--fg); }
+.aud { display:grid; grid-template-columns:repeat(auto-fit,minmax(186px,1fr)); gap:5px; }
+.ach { display:flex; align-items:center; gap:7px; padding:5px 8px; border:1px solid var(--line);
+       border-radius:4px; background:var(--panel); font-family:var(--mono); font-size:9px; }
+.ach .aid { color:var(--fg); font-weight:700; font-variant-numeric:tabular-nums; }
+.meter { flex:1; height:8px; background:var(--sunk); border-radius:2px; overflow:hidden;
+         display:flex; gap:1px; padding:1px; }
+.meter i { flex:1; background:var(--line); border-radius:1px; }
+.meter i.lit { background:var(--am-hi); }
+.meter i.hot { background:var(--am-max); animation:blink 1.1s ease-in-out infinite; }
+.ach .db { color:var(--fg-faint); font-variant-numeric:tabular-nums; min-width:26px;
+           text-align:right; }
+.ach .solo { padding:1px 5px; border:1px solid var(--line-hi); border-radius:2px;
+             color:var(--fg-mute); font-size:8px; }
+.ach .solo.on { border-color:var(--am-max); color:var(--am-max); }
+.ach .ch { color:var(--fg-faint); font-size:8px; }
+
+/* output delay — video and audio, separately adjustable */
+.dly { display:flex; align-items:center; gap:7px; }
+.dly .t { width:78px; height:4px; background:var(--line); border-radius:2px; position:relative; }
+.dly .t i { position:absolute; inset:0 auto 0 0; background:var(--am-hi); border-radius:2px; }
+.dly .t u { position:absolute; top:50%; width:9px; height:9px; margin:-4.5px 0 0 -4.5px;
+            border-radius:50%; background:var(--am-max); box-shadow:0 0 8px rgba(255,204,51,.5); }
+.dly .n { color:var(--fg); font-variant-numeric:tabular-nums; min-width:46px; }
+.net { margin-left:auto; padding:3px 9px; border:1px solid var(--am-max); border-radius:3px;
+       color:var(--am-max); font-variant-numeric:tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) { * { animation:none !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="head">
+    <div class="eyebrow">Orah Live Studio · Mac · interface design</div>
+    <h1>Preview, take, program</h1>
+    <p class="lede">
+      The surface the Mac app was built from. Twenty-four cameras, twelve nodes,
+      and a cut that has to land on four streams at the same instant.
+    </p>
+    <div class="note">
+      The layout follows what actually happens: <strong>what goes next on the left,
+      the action in the middle, what is out on the right</strong>. Preview → Take →
+      Program, read left to right.
+    </div>
+  </header>
+
+  <section class="sec">
+    <h2>Main window — 24 cameras, 12 nodes, show running</h2>
+
+    <div class="win">
+      <div class="wbar">
+        <div class="wdot"></div><div class="wdot"></div><div class="wdot"></div>
+        <div class="wtitle">Orah Live Studio</div>
+      </div>
+
+      <div class="strip">
+        <div class="stat"><span class="mark">1</span></div>
+        <div class="stat"><span class="led ok"></span>Cameras <b>23/24</b></div>
+        <div class="stat alert"><span class="led warn"></span>Nodes <b>11/12</b></div>
+        <div class="stat"><span class="led ok"></span>Vahana <b>4/4</b></div>
+        <div class="stat"><span class="led ok"></span>MIDI <b>APC mini</b></div>
+        <div class="stat"><span class="led ok"></span>Spread <b>34 ms</b></div>
+        <div class="sp"></div>
+        <div class="recbadge"><span class="led rec"></span>REC 01:12:40 · 2.1 TB</div>
+      </div>
+
+      <div class="body">
+        <div class="main">
+
+          <div>
+            <div class="rlabel"><span class="mark">2</span>Desk<span class="rule"></span>only these two cameras are decoded</div>
+            <div class="desk">
+              <div class="mon pre">
+                <div class="view g4">
+                  <div class="mtag pre">PREVIEW</div>
+                  <div class="mid">CAM 12 · Ramp</div>
+                  <div class="mfoot"><span>1920×1080</span><span>29.97p</span><span>delay +18 ms</span></div>
+                </div>
+              </div>
+
+              <div class="takecol">
+                <div class="tsub">transition</div>
+                <div class="tsel"><span class="on">FADE</span><span>CUT</span></div>
+                <div class="takerow">
+                  <div class="take">TAKE</div>
+                  <div class="tbar">
+                    <span class="end">PST</span>
+                    <div class="trk">
+                      <div class="fill" style="height:0"></div>
+                      <div class="hnd" style="bottom:0"></div>
+                    </div>
+                    <span class="end">PGM</span>
+                  </div>
+                </div>
+                <div class="tsub">600 ms · or by hand</div>
+              </div>
+
+              <div class="mon pgm">
+                <div class="view g0">
+                  <div class="mtag pgm">● ON AIR</div>
+                  <div class="mid">CAM 07 · Centre high</div>
+                  <div class="mfoot"><span>1920×1080</span><span>29.97p</span><span class="sp"></span><span>on air 03:52</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="rlabel">
+              <span class="mark">3</span>Multiview<span class="rule"></span>
+              <span class="lensbar">
+                <span style="color:var(--fg-faint)">lens</span>
+                <span class="lens on">0_0</span><span class="lens">0_1</span>
+                <span class="lens">1_0</span><span class="lens">1_1</span>
+              </span>
+            </div>
+            <div class="grid">
+        <button class="tile ready">
+          <div class="thumb g0"></div>
+          <div class="tbar"><span class="slot">01</span><span class="nm">Stage left</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g1"></div>
+          <div class="tbar"><span class="slot">02</span><span class="nm">Stage right</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g2"></div>
+          <div class="tbar"><span class="slot">03</span><span class="nm">Stage centre</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g3"></div>
+          <div class="tbar"><span class="slot">04</span><span class="nm">Front pit</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g4"></div>
+          <div class="tbar"><span class="slot">05</span><span class="nm">Balcony L</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g5"></div>
+          <div class="tbar"><span class="slot">06</span><span class="nm">Balcony R</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile onair">
+          <div class="thumb g0"></div><div class="tflag air">ON AIR</div>
+          <div class="tbar"><span class="slot">07</span><span class="nm">Centre high</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g1"></div>
+          <div class="tbar"><span class="slot">08</span><span class="nm">Crowd front</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g2"></div>
+          <div class="tbar"><span class="slot">09</span><span class="nm">Crowd rear</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g3"></div>
+          <div class="tbar"><span class="slot">10</span><span class="nm">Side gallery</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g4"></div>
+          <div class="tbar"><span class="slot">11</span><span class="nm">Backstage</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile preview">
+          <div class="thumb g5"></div><div class="tflag pre">PREVIEW</div>
+          <div class="tbar"><span class="slot">12</span><span class="nm">Ramp</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g0"></div>
+          <div class="tbar"><span class="slot">13</span><span class="nm">Mixer tower</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g1"></div>
+          <div class="tbar"><span class="slot">14</span><span class="nm">Bar</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g2"></div>
+          <div class="tbar"><span class="slot">15</span><span class="nm">Entrance</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g3"></div>
+          <div class="tbar"><span class="slot">16</span><span class="nm">Upper tier</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g4"></div>
+          <div class="tbar"><span class="slot">17</span><span class="nm">Catwalk</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g5"></div>
+          <div class="tbar"><span class="slot">18</span><span class="nm">Wing left</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g0"></div>
+          <div class="tbar"><span class="slot">19</span><span class="nm">Wing right</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g1"></div>
+          <div class="tbar"><span class="slot">20</span><span class="nm">Roof</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile offline">
+          <div class="thumb"><div class="nosig">NO SIGNAL</div></div>
+          <div class="tbar"><span class="slot">21</span><span class="nm">Dressing</span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g3"></div>
+          <div class="tbar"><span class="slot">22</span><span class="nm">Corridor</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g4"></div>
+          <div class="tbar"><span class="slot">23</span><span class="nm">Loading</span><span class="rdot"></span></div>
+        </button>
+        <button class="tile ready">
+          <div class="thumb g5"></div>
+          <div class="tbar"><span class="slot">24</span><span class="nm">Spare</span><span class="rdot"></span></div>
+        </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="rail">
+          <div class="grp">
+            <div class="gh"><span class="mark">4</span>Cameras<span class="rule"></span></div>
+            <div class="btn go">Start all</div>
+            <div class="btn">Stop all</div>
+          </div>
+
+          <div class="grp">
+            <div class="gh"><span class="mark">5</span>Delay — CAM 12<span class="rule"></span></div>
+            <div class="slider">
+              <div class="srow"><span>Offset</span><span class="v">+18 ms</span></div>
+              <div class="track"><i style="width:34%"></i><u style="left:34%"></u></div>
+            </div>
+            <div class="btn">Measure spread</div>
+          </div>
+
+          <div class="grp">
+            <div class="gh">Recording<span class="rule"></span></div>
+            <div class="btn recon">Stop recording</div>
+            <div class="kv"><span class="k">Independent of desk</span><span class="v">STREAMCOPY</span></div>
+          </div>
+
+          <div class="grp">
+            <div class="gh"><span class="mark">6</span>Nodes<span class="rule"></span></div>
+            <div class="nodes">
+          <div class="nchip ok"><span class="led ok"></span><b>N01</b><span>167 GB</span></div>
+          <div class="nchip ok"><span class="led ok"></span><b>N02</b><span>174 GB</span></div>
+          <div class="nchip ok"><span class="led ok"></span><b>N03</b><span>181 GB</span></div>
+          <div class="nchip warn"><span class="led warn"></span><b>N04</b><span>NO PROXY</span></div>
+          <div class="nchip ok"><span class="led ok"></span><b>N05</b><span>195 GB</span></div>
+          <div class="nchip ok"><span class="led ok"></span><b>N06</b><span>202 GB</span></div>
+          <div class="nchip ok"><span class="led ok"></span><b>N07</b><span>209 GB</span></div>
+          <div class="nchip ok"><span class="led ok"></span><b>N08</b><span>216 GB</span></div>
+          <div class="nchip bad"><span class="led bad"></span><b>N09</b><span>OFFLINE</span></div>
+          <div class="nchip ok"><span class="led ok"></span><b>N10</b><span>230 GB</span></div>
+          <div class="nchip ok"><span class="led ok"></span><b>N11</b><span>237 GB</span></div>
+          <div class="nchip ok"><span class="led ok"></span><b>N12</b><span>244 GB</span></div>
+            </div>
+            <div class="kv"><span class="k">Shortest</span><span class="v">N04 · 1h50</span></div>
+          </div>
+
+          <div class="grp">
+            <div class="gh">MIDI<span class="rule"></span></div>
+            <div class="kv"><span class="led ok"></span><span class="k">APC mini mk2</span><span class="v">24</span></div>
+            <div class="learn">Learn — press a pad</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chain">
+        <div class="rlabel"><span class="mark">7</span>Signal chain<span class="rule"></span>where it breaks</div>
+        <div class="crow">
+          <div class="cbox">
+            <div class="t"><span class="led ok"></span>Cameras</div>
+            <div class="v">23 streaming</div>
+            <div class="s">92 RTMP · to own nodes</div>
+          </div>
+          <div class="arr">→</div>
+          <div class="cbox">
+            <div class="t"><span class="led warn"></span>Nodes</div>
+            <div class="v">11 of 12</div>
+            <div class="s">record + proxy</div>
+          </div>
+          <div class="arr">→</div>
+          <div class="cbox">
+            <div class="t"><span class="led ok"></span>Switcher</div>
+            <div class="v">2 dec · 4 enc</div>
+            <div class="s">hardware · CFR</div>
+          </div>
+          <div class="arr">→</div>
+          <div class="cbox">
+            <div class="t"><span class="led ok"></span>MediaMTX</div>
+            <div class="v">4 paths</div>
+            <div class="s">:1935 · this Mac</div>
+          </div>
+          <div class="arr">→</div>
+          <div class="cbox">
+            <div class="t"><span class="led ok"></span>Vahana</div>
+            <div class="v">pulls 4 inputs</div>
+            <div class="s">stitching PC</div>
+          </div>
+          <div class="arr">⇣</div>
+          <div class="cbox">
+            <div class="t"><span class="led rec"></span>Recording</div>
+            <div class="v">92 files</div>
+            <div class="s">local on nodes</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>Two colours mean something. One hue carries the rest.</h2>
+    <div class="legend">
+      <div class="lg"><span class="sw" style="background:#F5453D"></span><span><b>Red</b> — live: on air, rolling, and the button that goes live</span></div>
+      <div class="lg"><span class="sw" style="border:1px solid #2FBE6A;background:rgba(47,190,106,.1)"></span><span><b>Green</b> — next up, in preview</span></div>
+      <div class="lg"><span class="sw" style="background:#F0B429"></span><span><b>Amber</b> — everything else the panel says</span></div>
+      <div class="lg"><span class="sw" style="background:#3A382F"></span><span><b>Grey</b> — dead or offline</span></div>
+    </div>
+    <p class="note">
+      Red and green are the oldest signal in a gallery and there is no reason to give
+      them up, so they are here — and <strong>reserved</strong>. Red means one thing:
+      <strong>live</strong> — a picture on air, a stream rolling to disk, the button
+      that starts either. Green means one thing: <strong>next</strong>. Nothing else may
+      be either colour — not a healthy node, not a passing check. Health, counters,
+      warnings and every label run on the single amber hue, which is what keeps a red
+      cell readable at a glance across ninety-six of them.
+    </p>
+  </section>
+
+
+  <section class="sec">
+    <h2>Second window — recording matrix</h2>
+    <p class="note">
+      Ninety-six files are being written. A list cannot tell you at a glance that all
+      ninety-six are healthy; a grid can. <strong>One cell per stream</strong>, grouped
+      by the node that owns it — click a node, then Record, or stop one node on its own.
+    </p>
+
+    <div class="win">
+      <div class="wbar">
+        <div class="wdot"></div><div class="wdot"></div><div class="wdot"></div>
+        <div class="wtitle">Recording</div>
+      </div>
+
+      <div class="strip">
+        <div class="stat"><span class="led ok"></span>Writing <b>88/96</b></div>
+        <div class="stat"><span class="led warn"></span>Failed <b>4</b></div>
+        <div class="stat"><span class="led bad"></span>Offline <b>4</b></div>
+        <div class="stat">Selected <b>N03</b></div>
+        <div class="sp"></div>
+        <div class="recbadge"><span class="led rec"></span>REC 01:12:40 · 2.1 TB</div>
+      </div>
+
+      <div class="main" style="padding:14px">
+        <div class="mtx">
+          <div class="nblk">
+            <div class="nhead"><span class="led ok"></span><b>N01</b><span class="free">167 GB · 2h13</span><span class="acts"><span>SOLO</span><span>STOP</span></span></div>
+            <div class="mrow"><span class="cid">01</span><span class="cnm">Stage left</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+            <div class="mrow"><span class="cid">02</span><span class="cnm">Stage right</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+          </div>
+          <div class="nblk">
+            <div class="nhead"><span class="led ok"></span><b>N02</b><span class="free">174 GB · 3h16</span><span class="acts"><span>SOLO</span><span>STOP</span></span></div>
+            <div class="mrow"><span class="cid">03</span><span class="cnm">Stage centre</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+            <div class="mrow"><span class="cid">04</span><span class="cnm">Front pit</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+          </div>
+          <div class="nblk sel">
+            <div class="nhead"><span class="led ok"></span><b>N03</b><span class="free">181 GB · 1h19</span><span class="acts"><span class="on">SOLO</span><span>STOP</span></span></div>
+            <div class="mrow"><span class="cid">05</span><span class="cnm">Balcony L</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+            <div class="mrow"><span class="cid">06</span><span class="cnm">Balcony R</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+          </div>
+          <div class="nblk">
+            <div class="nhead"><span class="led warn"></span><b>N04</b><span class="free">188 GB · 2h22</span><span class="acts"><span>SOLO</span><span>STOP</span></span></div>
+            <div class="mrow"><span class="cid">07</span><span class="cnm">Centre high</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+            <div class="mrow"><span class="cid">08</span><span class="cnm">Crowd front</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell fail"></div></span></div>
+          </div>
+          <div class="nblk">
+            <div class="nhead"><span class="led ok"></span><b>N05</b><span class="free">195 GB · 3h25</span><span class="acts"><span>SOLO</span><span>STOP</span></span></div>
+            <div class="mrow"><span class="cid">09</span><span class="cnm">Crowd rear</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+            <div class="mrow"><span class="cid">10</span><span class="cnm">Side gallery</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+          </div>
+          <div class="nblk">
+            <div class="nhead"><span class="led ok"></span><b>N06</b><span class="free">202 GB · 1h28</span><span class="acts"><span>SOLO</span><span>STOP</span></span></div>
+            <div class="mrow"><span class="cid">11</span><span class="cnm">Backstage</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+            <div class="mrow"><span class="cid">12</span><span class="cnm">Ramp</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+          </div>
+          <div class="nblk">
+            <div class="nhead"><span class="led ok"></span><b>N07</b><span class="free">209 GB · 2h31</span><span class="acts"><span>SOLO</span><span>STOP</span></span></div>
+            <div class="mrow"><span class="cid">13</span><span class="cnm">Mixer tower</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+            <div class="mrow"><span class="cid">14</span><span class="cnm">Bar</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+          </div>
+          <div class="nblk">
+            <div class="nhead"><span class="led ok"></span><b>N08</b><span class="free">216 GB · 3h34</span><span class="acts"><span>SOLO</span><span>STOP</span></span></div>
+            <div class="mrow"><span class="cid">15</span><span class="cnm">Entrance</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+            <div class="mrow"><span class="cid">16</span><span class="cnm">Upper tier</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+          </div>
+          <div class="nblk off">
+            <div class="nhead"><span class="led bad"></span><b>N09</b><span class="free">OFFLINE</span><span class="acts"><span>RETRY</span></span></div>
+            <div class="mrow"><span class="cid">17</span><span class="cnm">Catwalk</span><span class="cells"><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div></span></div>
+            <div class="mrow"><span class="cid">18</span><span class="cnm">Wing left</span><span class="cells"><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div></span></div>
+          </div>
+          <div class="nblk">
+            <div class="nhead"><span class="led ok"></span><b>N10</b><span class="free">230 GB · 2h40</span><span class="acts"><span>SOLO</span><span>STOP</span></span></div>
+            <div class="mrow"><span class="cid">19</span><span class="cnm">Wing right</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+            <div class="mrow"><span class="cid">20</span><span class="cnm">Roof</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+          </div>
+          <div class="nblk">
+            <div class="nhead"><span class="led ok"></span><b>N11</b><span class="free">237 GB · 3h43</span><span class="acts"><span>SOLO</span><span>STOP</span></span></div>
+            <div class="mrow"><span class="cid">21</span><span class="cnm">Dressing</span><span class="cells"><div class="cell fail"></div><div class="cell fail"></div><div class="cell fail"></div><div class="cell fail"></div></span></div>
+            <div class="mrow"><span class="cid">22</span><span class="cnm">Corridor</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+          </div>
+          <div class="nblk">
+            <div class="nhead"><span class="led ok"></span><b>N12</b><span class="free">244 GB · 1h46</span><span class="acts"><span>SOLO</span><span>STOP</span></span></div>
+            <div class="mrow"><span class="cid">23</span><span class="cnm">Loading</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+            <div class="mrow"><span class="cid">24</span><span class="cnm">Spare</span><span class="cells"><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div><div class="cell rec"></div></span></div>
+          </div>
+        </div>
+        <div class="mkey">
+          <span><b class="cell rec" style="border:1px solid var(--program)"></b>recording</span>
+          <span><b class="cell fail"></b>failed — needs attention</span>
+          <span><b class="cell"></b>idle</span>
+          <span>cells are 0_0 · 0_1 · 1_0 · 1_1</span>
+        </div>
+      </div>
+
+      <div class="chain">
+        <div class="rlabel">Audio<span class="rule"></span>monitor and route onward</div>
+        <div class="arow">
+          <span>MONITOR</span><span class="sel2">CAM 07 · on air</span>
+          <span>OUTPUT</span><span class="sel2">Fairlight MADI · CoreAudio (64 ch)</span>
+          <span>MAP</span><span class="sel2">camera N → W X Y Z, 4 ch each</span>
+          <span>SEND</span><span class="sel2">program + preview + solo</span>
+        </div>
+
+        <div class="arow" style="margin-top:6px">
+          <span>OUTPUT DELAY</span>
+          <span class="dly"><span>VIDEO</span><span class="t"><i style="width:62%"></i><u style="left:62%"></u></span><span class="n">120 ms</span></span>
+          <span class="dly"><span>AUDIO</span><span class="t"><i style="width:21%"></i><u style="left:21%"></u></span><span class="n">40 ms</span></span>
+          <span class="net">A/V +80 ms</span>
+        </div>
+        <div class="aud" style="margin-top:7px">
+            <div class="ach"><span class="aid">01</span><span class="meter"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class=""></i><i class=""></i><i class=""></i></span><span class="db">-9</span><span class="ch">1-4</span><span class="solo">S</span></div>
+            <div class="ach"><span class="aid">02</span><span class="meter"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span><span class="db">-18</span><span class="ch">5-8</span><span class="solo">S</span></div>
+            <div class="ach"><span class="aid">03</span><span class="meter"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class=""></i><i class=""></i></span><span class="db">-6</span><span class="ch">9-12</span><span class="solo">S</span></div>
+            <div class="ach"><span class="aid">04</span><span class="meter"><i class="lit"></i><i class="lit"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span><span class="db">-24</span><span class="ch">13-16</span><span class="solo">S</span></div>
+            <div class="ach"><span class="aid">05</span><span class="meter"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span><span class="db">-21</span><span class="ch">17-20</span><span class="solo">S</span></div>
+            <div class="ach"><span class="aid">06</span><span class="meter"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span><span class="db">-21</span><span class="ch">21-24</span><span class="solo">S</span></div>
+            <div class="ach"><span class="aid">07</span><span class="meter"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class=""></i><i class="hot"></i><i class="hot"></i></span><span class="db">-9</span><span class="ch">25-28</span><span class="solo on">S</span></div>
+            <div class="ach"><span class="aid">08</span><span class="meter"><i class="lit"></i><i class="lit"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span><span class="db">-24</span><span class="ch">29-32</span><span class="solo">S</span></div>
+            <div class="ach"><span class="aid">09</span><span class="meter"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span><span class="db">-15</span><span class="ch">33-36</span><span class="solo">S</span></div>
+            <div class="ach"><span class="aid">10</span><span class="meter"><i class="lit"></i><i class="lit"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span><span class="db">-24</span><span class="ch">37-40</span><span class="solo">S</span></div>
+            <div class="ach"><span class="aid">11</span><span class="meter"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span><span class="db">-21</span><span class="ch">41-44</span><span class="solo">S</span></div>
+            <div class="ach"><span class="aid">12</span><span class="meter"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class=""></i><i class=""></i></span><span class="db">-6</span><span class="ch">45-48</span><span class="solo">S</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>Why it is shaped this way</h2>
+    <div class="keys">
+
+      <div class="key"><div class="n">1</div><div>
+        <h3>Spread sits in the status bar</h3>
+        <p>Not "in sync yes/no" but <em>by how much</em>. Camera crystals drift roughly
+           36 ms an hour, so this number grows during a show and has to stay in sight.</p>
+      </div></div>
+
+      <div class="key"><div class="n">2</div><div>
+        <h3>Preview → Take → Program</h3>
+        <p>The target camera warms up in preview first; Take then cross-fades an already
+           running picture. This is not comfort — it is the only way to get a transition
+           on four paths to land on the same instant.</p>
+        <span class="fix">Rejected: cutting straight to air</span>
+      </div></div>
+
+      <div class="key"><div class="n">3</div><div>
+        <h3>One lens, switchable</h3>
+        <p>Tiles show proxy streams from the nodes, one lens per camera. The selector
+           above changes which of the four — for every camera at once.</p>
+        <span class="fix">Rejected: a quad of all four lenses</span>
+      </div></div>
+
+      <div class="key"><div class="n">4</div><div>
+        <h3>Desk runs at full quality</h3>
+        <p>Multiview runs on small proxies. The two cameras being decided on come from
+           the full stream — you cannot judge focus on a proxy.</p>
+      </div></div>
+
+      <div class="key"><div class="n">5</div><div>
+        <h3>Delay is within reach, not in settings</h3>
+        <p>It belongs to the camera in preview and gets touched during a show, not during
+           the build. So it sits beside the desk.</p>
+      </div></div>
+
+      <div class="key"><div class="n">6</div><div>
+        <h3>Twelve nodes have to fit</h3>
+        <p>Chips instead of rows. One number matters mid-show — <em>how much longer the
+           worst one can record</em> — and it is spelled out underneath. N04 records but
+           serves no proxy.</p>
+      </div></div>
+
+      <div class="key"><div class="n">7</div><div>
+        <h3>The chain has a new shape</h3>
+        <p>Cameras publish to their own nodes, not to the Mac. Only two cameras cross the
+           Mac — which is why it reads "2 dec · 4 enc" and not 96 streams.</p>
+        <span class="fix">Rejected: routing everything through the Mac</span>
+      </div></div>
+
+      <div class="key"><div class="n">8</div><div>
+        <h3>The T-bar is the same transition, driven by hand</h3>
+        <p>Take runs the dissolve on a timer. The bar next to it runs the same dissolve
+           on your wrist — hold it half way, ease it in, stop when the moment is not
+           there yet. Underneath it is one number between 0 and 1 either way, so the
+           bar costs nothing extra. It binds to a physical fader on the MIDI desk.</p>
+      </div></div>
+
+      <div class="key"><div class="n">9</div><div>
+        <h3>Warnings are amber, not red</h3>
+        <p>A node running out of disk blinks amber; it never goes red. Red is spent
+           entirely on what is live, so it keeps meaning that. It is the difference
+           between glancing at the panel and having to read it.</p>
+      </div></div>
+
+    </div>
+  </section>
+
+</div>

@@ -1,0 +1,46 @@
+# Publishes site/ to GitHub Pages on every push.
+#
+# The site is committed already, so this workflow only hands the folder to
+# Pages — there is nothing to build and no toolchain to install. That is the
+# whole point of keeping site/ in the repository: the same files can be dragged
+# onto an FTP host, opened locally, or served from here, and all three are the
+# thing you actually looked at.
+#
+# Turn it on once: repository → Settings → Pages → Source: GitHub Actions.
+# The site then lives at https://<user>.github.io/<repo>/
+
+name: pages
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# A run already in flight is not worth finishing when a newer commit exists,
+# but it is allowed to complete rather than be killed mid-deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

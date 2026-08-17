@@ -1,0 +1,43 @@
+{
+  "audioChannels" : 4,
+  "audioGainsDB" : [
+    20,
+    20,
+    20,
+    20
+  ],
+  "calibrationBytes" : 6847,
+  "calibrationFile" : "20260816T093509_factoryPresetsProject.ptv",
+  "cameraClockUnix" : 327,
+  "cameraName" : "My 360 Camera",
+  "checkedAt" : "2026-08-16T09:34:56Z",
+  "clockOffsetSeconds" : -1786872581,
+  "firmware" : "1.50.23",
+  "hardware" : "01A",
+  "host" : "192.168.0.173",
+  "interfaces" : {
+
+  },
+  "mode" : "idle",
+  "model" : "Atlas360",
+  "notes" : [
+
+  ],
+  "number" : 6,
+  "packetLossPercent" : 0,
+  "port" : 9989,
+  "rememberedStreamURLs" : [
+    "rtmp:\/\/10.41.0.1:1935\/cam06\/0_0",
+    "rtmp:\/\/10.41.0.1:1935\/cam06\/0_1",
+    "rtmp:\/\/10.41.0.1:1935\/cam06\/1_0",
+    "rtmp:\/\/10.41.0.1:1935\/cam06\/1_1"
+  ],
+  "roundTripMilliseconds" : 8.282,
+  "sensors" : 4,
+  "serial" : "AQ1610012424",
+  "serviceName" : "Atlas360@AQ1610012424",
+  "socs" : 2,
+  "streamLensesSeen" : 4,
+  "streamTestedAt" : "2026-08-16T20:38:28Z",
+  "verdict" : "PASS"
+}

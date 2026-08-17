@@ -1,0 +1,32 @@
+[Unit]
+# Status, proxy transcodes and Bonjour. Useful, but never at the recorder's
+# expense — hence the lower priority and the ordering below.
+Description=Orah node — agent
+After=network-online.target orah-mediamtx.service
+Wants=network-online.target
+BindsTo=orah-mediamtx.service
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@INSTALL_DIR@
+EnvironmentFile=/etc/orah/node.env
+ExecStart=@INSTALL_DIR@/venv/bin/python @INSTALL_DIR@/agent.py \
+    --node-id ${NODE_ID} \
+    --record-dir ${RECORD_DIR} \
+    --port ${AGENT_PORT} \
+    --cameras ${CAMERAS}
+
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=0
+
+# Proxy work yields to the recorder under load.
+Nice=10
+IOSchedulingClass=idle
+
+ProtectSystem=full
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

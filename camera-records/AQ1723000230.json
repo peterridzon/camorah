@@ -1,0 +1,35 @@
+{
+  "audioChannels": 4,
+  "audioGainsDB": [
+    20,
+    20,
+    20,
+    20
+  ],
+  "calibrationBytes": 6846,
+  "calibrationFile": "20260816T110033_factoryPresetsProject.ptv",
+  "cameraClockUnix": 90,
+  "cameraName": "My 360 Camera",
+  "checkedAt": "2026-08-16T11:00:18Z",
+  "clockOffsetSeconds": -1786877942,
+  "firmware": "1.50.23",
+  "gatewayRoundTripMilliseconds": 6.106,
+  "hardware": "01A",
+  "host": "192.168.0.165",
+  "mode": "idle",
+  "model": "Atlas360",
+  "notes": [
+    "box: operator recalls (uncertain, 2026-08-17): these units were already tried in the stitching box and could not be reflashed. Marked on the units as running only with system 1.1.2. If that holds, the box route - the only way a camera can be flashed at all - is already exhausted. Worth confirming whether the box failed to SEE them or saw them and the upgrade failed; those mean different things."
+  ],
+  "number": 23,
+  "overWiFi": true,
+  "packetLossPercent": 0,
+  "port": 9989,
+  "rememberedStreamURLs": [],
+  "roundTripMilliseconds": 24.369,
+  "sensors": 4,
+  "serial": "AQ1723000230",
+  "serviceName": "Atlas360@AQ1723000230",
+  "socs": 2,
+  "verdict": "PASS"
+}

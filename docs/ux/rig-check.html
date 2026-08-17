@@ -1,0 +1,447 @@
+<meta charset="utf-8">
+<title>Rig Check — event setup</title>
+<style>
+  :root {
+    --bg: #0C0C0C; --panel: #161615; --raised: #1F1F1E;
+    --line: #333331; --lineHi: #4A4A47;
+    --fg: #D8D6D0; --dim: #8E8C86; --faint: #5E5C57; --dead: #333331;
+    --amber: #F8980A; --yellow: #FED040; --red: #D81030;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 0 60px;
+    background: var(--bg); color: var(--fg);
+    font-family: "Helvetica Neue", Helvetica, Roboto, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { width: 1352px; padding: 56px 60px; }
+
+  .eyebrow { font-size: 10.5px; letter-spacing: 2.6px; color: var(--faint);
+             text-transform: uppercase; }
+  h1 { font-size: 38px; margin: 14px 0 10px; letter-spacing: -0.4px; color: var(--yellow);
+       font-family: var(--mono); font-weight: 600; }
+  .lede { font-size: 14.5px; color: var(--dim); line-height: 1.65; max-width: 720px; margin: 0; }
+  .note { border-left: 2px solid var(--amber); padding: 10px 0 10px 16px;
+          margin: 22px 0 0; font-size: 13px; color: var(--dim); line-height: 1.7; max-width: 720px; }
+  .note strong { color: var(--fg); }
+
+  h2 { font-size: 11px; letter-spacing: 2.6px; color: var(--faint); text-transform: uppercase;
+       margin: 54px 0 16px; font-weight: 600; }
+
+  .win { border: 1px solid var(--line); border-radius: 7px; overflow: hidden;
+         background: var(--panel); }
+  .titlebar { background: #232322; padding: 7px 12px; display: flex; align-items: center;
+              gap: 7px; border-bottom: 1px solid var(--line); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #3a3a38; }
+  .titlebar .name { flex: 1; text-align: center; font-size: 11px; letter-spacing: 2.4px;
+                    color: var(--dim); }
+
+  /* ── status strip ─────────────────────────────────────────────── */
+  .strip { display: flex; align-items: center; gap: 26px; padding: 12px 16px;
+           border-bottom: 1px solid var(--line); background: #131312; }
+  .stat { display: flex; align-items: baseline; gap: 8px; }
+  .stat .k { font-size: 9.5px; letter-spacing: 1.8px; color: var(--faint); text-transform: uppercase; }
+  .stat .v { font-family: var(--mono); font-size: 15px; color: var(--fg); }
+  .stat .v.ok { color: var(--yellow); }
+  .stat .v.work { color: var(--amber); }
+  .stat .v.bad { color: var(--red); }
+  .verdict { margin-left: auto; font-family: var(--mono); font-size: 12px;
+             padding: 5px 12px; border-radius: 4px; letter-spacing: 0.4px;
+             border: 1px solid var(--amber); color: var(--amber); }
+
+  .body { display: grid; grid-template-columns: 1fr 322px; }
+  .left { padding: 16px; border-right: 1px solid var(--line); }
+  .right { padding: 16px; }
+
+  /* ── node groups ──────────────────────────────────────────────── */
+  .node { margin-bottom: 18px; }
+  .nodehead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .nodehead .id { font-family: var(--mono); font-size: 12px; color: var(--fg); }
+  .nodehead .meta { font-size: 10.5px; color: var(--faint); }
+  .nodehead .rule { flex: 1; height: 1px; background: var(--line); }
+  .nodehead .warn { font-size: 10px; color: var(--red); letter-spacing: 0.6px; }
+
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+
+  .cam { background: var(--raised); border: 1px solid var(--line); border-radius: 5px;
+         padding: 9px 10px 8px; position: relative; }
+  .cam .top { display: flex; align-items: baseline; gap: 7px; }
+  .cam .num { font-family: var(--mono); font-size: 15px; font-weight: 700; }
+  .cam .where { font-size: 10.5px; color: var(--dim); overflow: hidden;
+                text-overflow: ellipsis; white-space: nowrap; }
+  .cam .state { font-size: 9.5px; letter-spacing: 1.3px; text-transform: uppercase;
+                margin-top: 7px; }
+  .cam .detail { font-size: 10px; color: var(--faint); margin-top: 3px;
+                 font-family: var(--mono); }
+  .lenses { display: flex; gap: 3px; margin-top: 8px; }
+  .lens { height: 3px; flex: 1; border-radius: 1px; background: var(--dead); }
+  .lens.on { background: var(--yellow); }
+
+  .cam.ready { border-color: #4a4a2a; }
+  .cam.ready .num { color: var(--yellow); }
+  .cam.ready .state { color: var(--yellow); }
+
+  .cam.work { border-color: #5a4318; }
+  .cam.work .num { color: var(--amber); }
+  .cam.work .state { color: var(--amber); }
+
+  .cam.bad { border-color: #5a1c26; background: #1c1416; }
+  .cam.bad .num { color: var(--red); }
+  .cam.bad .state { color: var(--red); }
+
+  .cam .fix { position: absolute; top: 7px; right: 8px; font-size: 8.5px;
+              letter-spacing: 0.8px; color: var(--faint); border: 1px solid var(--dead);
+              border-radius: 3px; padding: 1px 5px; }
+  .cam.fixing { border-color: var(--amber); border-style: dashed; background: #1a1710; }
+  .cam.fixing .num { color: var(--amber); }
+  .cam.fixing .state { color: var(--amber); }
+  .cam.fixing .fix { color: var(--bg); background: var(--amber); border-color: var(--amber); }
+
+  .cam.absent { border-style: dashed; border-color: #2e2e2c; background: #121211; }
+  .cam.absent .num { color: var(--faint); }
+  .cam.absent .where { color: var(--dead); }
+  .cam.absent .state { color: var(--faint); }
+
+  /* ── right rail ───────────────────────────────────────────────── */
+  .railhead { font-size: 10px; letter-spacing: 2.2px; color: var(--faint);
+              text-transform: uppercase; margin: 2px 0 10px; }
+  .issue { border: 1px solid var(--line); border-left-width: 2px; border-radius: 4px;
+           padding: 9px 11px; margin-bottom: 8px; background: #131312; }
+  .issue.bad { border-left-color: var(--red); }
+  .issue.work { border-left-color: var(--amber); }
+  .issue .h { font-size: 11.5px; color: var(--fg); margin-bottom: 4px; }
+  .issue .b { font-size: 11px; color: var(--dim); line-height: 1.55; }
+  .issue .b em { color: var(--amber); font-style: normal; }
+
+  .backbone { margin-top: 22px; }
+  .bar { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; font-size: 11px; }
+  .bar .lbl { font-family: var(--mono); color: var(--dim); width: 42px; }
+  .bar .track { flex: 1; height: 5px; background: var(--dead); border-radius: 3px; overflow: hidden; }
+  .bar .fill { height: 100%; background: var(--yellow); }
+  .bar .fill.part { background: var(--amber); }
+  .bar .fill.none { background: var(--red); }
+  .bar .n { font-family: var(--mono); color: var(--faint); font-size: 10px; width: 34px;
+            text-align: right; }
+
+  /* ── the tray of cameras nobody has claimed yet ───────────────── */
+  .tray { margin-top: 4px; border: 1px solid var(--line); border-radius: 5px;
+          background: #131312; padding: 11px 12px; }
+  .tray .h { font-size: 10px; letter-spacing: 2.2px; color: var(--faint);
+             text-transform: uppercase; margin-bottom: 9px; }
+  .newcam { display: flex; align-items: center; gap: 10px; padding: 7px 0;
+            border-bottom: 1px solid #232322; }
+  .newcam:last-child { border-bottom: 0; }
+  .newcam .sn { font-family: var(--mono); font-size: 11px; color: var(--fg); flex: 1; }
+  .newcam .ip { font-family: var(--mono); font-size: 10px; color: var(--faint); }
+  .newcam .look { font-size: 9px; letter-spacing: 0.8px; color: var(--dim);
+                  border: 1px solid var(--line); border-radius: 3px; padding: 2px 7px; }
+  .newcam .install { font-size: 9px; letter-spacing: 0.8px; color: var(--bg);
+                     background: var(--yellow); border-radius: 3px; padding: 3px 9px;
+                     font-weight: 600; }
+
+  .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 26px; margin-top: 18px; }
+  .key { display: flex; gap: 11px; }
+  .key .n { font-family: var(--mono); font-size: 11px; color: var(--bg);
+            background: var(--amber); width: 19px; height: 19px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; flex: none; }
+  .key h3 { font-size: 12.5px; margin: 1px 0 5px; color: var(--fg); font-weight: 600; }
+  .key p { font-size: 12px; color: var(--dim); line-height: 1.6; margin: 0; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Orah Live Studio · Mac · interface design</div>
+    <h1>Rig check</h1>
+    <p class="lede">
+      The screen for the hours before a show, while cameras are being hung and
+      cable is being run. It answers one question continuously: what is ready,
+      what is not, and what is actually wrong.
+    </p>
+    <div class="note">
+      It works from a <strong>roster</strong> — the list of cameras this event
+      expects. Without one the tool can only report what it found, and the thing
+      that matters most on a rig day is what it <strong>did not</strong> find.
+    </div>
+  </header>
+
+  <h2>Setup screen — 24 expected, mid-rig</h2>
+
+  <div class="win">
+    <div class="titlebar">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      <div class="name">RIG CHECK — SPRING GALA</div>
+    </div>
+
+    <div class="strip">
+      <div class="stat"><span class="k">Expected</span><span class="v">24</span></div>
+      <div class="stat"><span class="k">Ready</span><span class="v ok">17</span></div>
+      <div class="stat"><span class="k">Working on it</span><span class="v work">3</span></div>
+      <div class="stat"><span class="k">Not there</span><span class="v bad">4</span></div>
+      <div class="stat"><span class="k">Being fixed</span><span class="v work">1</span></div>
+      <div class="stat"><span class="k">Nodes</span><span class="v">5 of 6</span></div>
+      <div class="verdict">NOT READY — 7 to go</div>
+    </div>
+
+    <div class="body">
+      <div class="left">
+
+        <!-- node 1 -->
+        <div class="node">
+          <div class="nodehead">
+            <span class="id">N01</span>
+            <span class="meta">stage left · 4 cameras · 1.9 TB free</span>
+            <span class="rule"></span>
+          </div>
+          <div class="grid">
+            <div class="cam ready"><span class="fix">FIX</span><div class="top"><span class="num">01</span><span class="where">Stage left</span></div>
+              <div class="state">Ready</div><div class="detail">4/4 · 5.2 ms</div>
+              <div class="lenses"><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i></div></div>
+            <div class="cam ready"><span class="fix">FIX</span><div class="top"><span class="num">02</span><span class="where">Stage right</span></div>
+              <div class="state">Ready</div><div class="detail">4/4 · 5.6 ms</div>
+              <div class="lenses"><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i></div></div>
+            <div class="cam ready"><span class="fix">FIX</span><div class="top"><span class="num">03</span><span class="where">Centre</span></div>
+              <div class="state">Ready</div><div class="detail">4/4 · 5.1 ms</div>
+              <div class="lenses"><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i></div></div>
+            <div class="cam work"><span class="fix">FIX</span><div class="top"><span class="num">04</span><span class="where">Front pit</span></div>
+              <div class="state">2 of 4 lenses</div><div class="detail">one SoC dark</div>
+              <div class="lenses"><i class="lens on"></i><i class="lens on"></i><i class="lens"></i><i class="lens"></i></div></div>
+          </div>
+        </div>
+
+        <!-- node 2 -->
+        <div class="node">
+          <div class="nodehead">
+            <span class="id">N02</span>
+            <span class="meta">balcony · 4 cameras · 2.1 TB free</span>
+            <span class="rule"></span>
+          </div>
+          <div class="grid">
+            <div class="cam ready"><span class="fix">FIX</span><div class="top"><span class="num">05</span><span class="where">Balcony L</span></div>
+              <div class="state">Ready</div><div class="detail">4/4 · 6.0 ms</div>
+              <div class="lenses"><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i></div></div>
+            <div class="cam ready"><span class="fix">FIX</span><div class="top"><span class="num">06</span><span class="where">Balcony R</span></div>
+              <div class="state">Ready</div><div class="detail">4/4 · 5.8 ms</div>
+              <div class="lenses"><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i></div></div>
+            <div class="cam work"><span class="fix">FIX</span><div class="top"><span class="num">07</span><span class="where">Upper tier</span></div>
+              <div class="state">Starting</div><div class="detail">18 s · no picture yet</div>
+              <div class="lenses"><i class="lens"></i><i class="lens"></i><i class="lens"></i><i class="lens"></i></div></div>
+            <div class="cam ready"><span class="fix">FIX</span><div class="top"><span class="num">08</span><span class="where">Catwalk</span></div>
+              <div class="state">Ready</div><div class="detail">4/4 · 7.1 ms</div>
+              <div class="lenses"><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i></div></div>
+          </div>
+        </div>
+
+        <!-- node 3 — the interesting one -->
+        <div class="node">
+          <div class="nodehead">
+            <span class="id">N03</span>
+            <span class="meta">corridor · 4 cameras</span>
+            <span class="rule"></span>
+            <span class="warn">ALL FOUR DARK — LOOK AT THE NODE, NOT THE CAMERAS</span>
+          </div>
+          <div class="grid">
+            <div class="cam absent"><span class="fix">FIX</span><div class="top"><span class="num">09</span><span class="where">Corridor N</span></div>
+              <div class="state">Not on the network</div><div class="detail">—</div>
+              <div class="lenses"><i class="lens"></i><i class="lens"></i><i class="lens"></i><i class="lens"></i></div></div>
+            <div class="cam absent"><span class="fix">FIX</span><div class="top"><span class="num">10</span><span class="where">Corridor S</span></div>
+              <div class="state">Not on the network</div><div class="detail">—</div>
+              <div class="lenses"><i class="lens"></i><i class="lens"></i><i class="lens"></i><i class="lens"></i></div></div>
+            <div class="cam absent"><span class="fix">FIX</span><div class="top"><span class="num">11</span><span class="where">Lobby</span></div>
+              <div class="state">Not on the network</div><div class="detail">—</div>
+              <div class="lenses"><i class="lens"></i><i class="lens"></i><i class="lens"></i><i class="lens"></i></div></div>
+            <div class="cam absent"><span class="fix">FIX</span><div class="top"><span class="num">12</span><span class="where">Cloakroom</span></div>
+              <div class="state">Not on the network</div><div class="detail">—</div>
+              <div class="lenses"><i class="lens"></i><i class="lens"></i><i class="lens"></i><i class="lens"></i></div></div>
+          </div>
+        </div>
+
+        <!-- node 4 -->
+        <div class="node">
+          <div class="nodehead">
+            <span class="id">N04</span>
+            <span class="meta">roof · 4 cameras · 1.4 TB free</span>
+            <span class="rule"></span>
+          </div>
+          <div class="grid">
+            <div class="cam ready"><span class="fix">FIX</span><div class="top"><span class="num">13</span><span class="where">Roof E</span></div>
+              <div class="state">Ready</div><div class="detail">4/4 · 8.2 ms</div>
+              <div class="lenses"><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i></div></div>
+            <div class="cam fixing"><span class="fix">FIXING</span>
+              <div class="top"><span class="num">14</span><span class="where">Roof W</span></div>
+              <div class="state">Being worked on</div><div class="detail">not contacted · 4 min</div>
+              <div class="lenses"><i class="lens"></i><i class="lens"></i><i class="lens"></i><i class="lens"></i></div></div>
+            <div class="cam ready"><span class="fix">FIX</span><div class="top"><span class="num">15</span><span class="where">Roof N</span></div>
+              <div class="state">Ready</div><div class="detail">4/4 · 7.9 ms</div>
+              <div class="lenses"><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i></div></div>
+            <div class="cam ready"><span class="fix">FIX</span><div class="top"><span class="num">16</span><span class="where">Roof S</span></div>
+              <div class="state">Ready</div><div class="detail">4/4 · 8.0 ms</div>
+              <div class="lenses"><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i><i class="lens on"></i></div></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- right rail -->
+      <div class="right">
+        <div class="railhead">What to do next</div>
+
+        <div class="issue bad">
+          <div class="h">N03 — all four cameras dark</div>
+          <div class="b">Four failures behind one node is <em>one</em> fault, not four.
+            The node itself has not reported in either. Check its power and uplink
+            before touching any camera on it.</div>
+        </div>
+
+        <div class="issue work">
+          <div class="h">Camera 14 · Roof W — being worked on</div>
+          <div class="b">Marked 4 minutes ago, after 27 % packet loss against a clean
+            router. <em>Nothing is being sent to it</em> while the mark is on. Clear it
+            when the cable is changed and it will be re-checked from the top.</div>
+        </div>
+
+        <div class="issue work">
+          <div class="h">Camera 04 · Front pit</div>
+          <div class="b">Two lenses of four. One of its two SoCs did not start.
+            Power cycle it — this one usually comes back.</div>
+        </div>
+
+        <div class="issue work">
+          <div class="h">Camera 07 · Upper tier</div>
+          <div class="b">Started 18 s ago and has not published yet. Normal until
+            about 20 s; it will turn amber if it passes a minute.</div>
+        </div>
+
+        <div class="tray">
+          <div class="h">On the network, not in the roster</div>
+          <div class="newcam">
+            <span class="sn">AQ1721000175</span>
+            <span class="ip">.209</span>
+            <span class="look">SHOW ME</span>
+            <span class="install">INSTALL</span>
+          </div>
+          <div class="newcam">
+            <span class="sn">DVT2AQ16080011</span>
+            <span class="ip">.247</span>
+            <span class="look">SHOW ME</span>
+            <span class="install">INSTALL</span>
+          </div>
+        </div>
+
+        <div class="backbone">
+          <div class="railhead">Backbone</div>
+          <div class="bar"><span class="lbl">N01</span><span class="track"><span class="fill" style="width:100%"></span></span><span class="n">4/4</span></div>
+          <div class="bar"><span class="lbl">N02</span><span class="track"><span class="fill part" style="width:75%"></span></span><span class="n">3/4</span></div>
+          <div class="bar"><span class="lbl">N03</span><span class="track"><span class="fill none" style="width:0%"></span></span><span class="n">0/4</span></div>
+          <div class="bar"><span class="lbl">N04</span><span class="track"><span class="fill part" style="width:75%"></span></span><span class="n">3/4</span></div>
+          <div class="bar"><span class="lbl">N05</span><span class="track"><span class="fill" style="width:100%"></span></span><span class="n">4/4</span></div>
+          <div class="bar"><span class="lbl">N06</span><span class="track"><span class="fill part" style="width:75%"></span></span><span class="n">3/4</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Why it is shaped this way</h2>
+  <div class="keys">
+
+    <div class="key"><div class="n">1</div><div>
+      <h3>It starts from a roster</h3>
+      <p>Twenty-four expected, by number and position. A tool that only lists what
+         it discovered cannot tell you that camera 19 is missing — and on a rig day
+         that is the only question worth asking.</p>
+    </div></div>
+
+    <div class="key"><div class="n">9</div><div>
+      <h3>Cameras find their own place</h3>
+      <p>The roster remembers serials, and a camera reports its serial the moment
+         it is reachable. So a camera hung anywhere, on any node, in any order,
+         lands on its own number without anyone touching the screen. Rigging does
+         not have to happen one camera at a time.</p>
+    </div></div>
+
+    <div class="key"><div class="n">10</div><div>
+      <h3>Install is for cameras the roster does not know</h3>
+      <p>A new unit, a borrowed one, a replacement mid-show: it appears in the tray
+         with its serial, <em>Show me</em> puts its picture up so it can be told
+         apart from the others, and <em>Install</em> drops it onto a number. From
+         then on it is remembered and finds that place by itself.</p>
+    </div></div>
+
+    <div class="key"><div class="n">2</div><div>
+      <h3>Grouped by node, not by number</h3>
+      <p>Four dark cameras behind one node is one fault. Laid out by number they
+         look like four broken cameras and somebody spends an hour on the wrong
+         end of the cable.</p>
+    </div></div>
+
+    <div class="key"><div class="n">3</div><div>
+      <h3>Every camera shows the first thing that failed</h3>
+      <p>Not on the network, no control, no picture, two lenses of four. The step
+         that failed says where to go — power, cable, or the camera itself.</p>
+    </div></div>
+
+    <div class="key"><div class="n">4</div><div>
+      <h3>Packet loss against the router, always</h3>
+      <p>A round trip on its own means nothing, especially over Wi-Fi. Measured
+         against the router in the same check, the difference belongs to the
+         camera's own run of cable.</p>
+    </div></div>
+
+    <div class="key"><div class="n">7</div><div>
+      <h3>Watching costs nothing; asking costs a session</h3>
+      <p>Ping, ARP and the streams already arriving are free and are what this
+         screen runs on. A control connection is not: the camera has one session
+         and does not take it back on its own, so it is opened once per camera and
+         held, never reopened in a loop.</p>
+    </div></div>
+
+    <div class="key"><div class="n">8</div><div>
+      <h3>Fix marks a camera as yours</h3>
+      <p>Press it before touching a camera. Nothing is sent to that one while the
+         mark is on — no control, no start, no polling — so a unit being recabled
+         is not fighting the desk. It stops counting as a fault and starts counting
+         as work in progress; clear it and the check runs again from the top.</p>
+    </div></div>
+
+    <div class="key"><div class="n">5</div><div>
+      <h3>It watches, it does not sample</h3>
+      <p>Cameras are hung over hours. The screen updates itself and keeps the
+         history, so a camera that came up and dropped out again is visible as
+         exactly that.</p>
+    </div></div>
+
+    <div class="key"><div class="n">6</div><div>
+      <h3>One verdict, in words</h3>
+      <p><em>Not ready — 7 to go.</em> The number that decides whether the show can
+         start belongs at the top, not assembled in someone's head from a grid.</p>
+    </div></div>
+
+  </div>
+</div>
+
+<script>
+/* Embedded mode.
+   When this page is shown inside the site it is not a demo in a box — it is the
+   page. So its own intro, padding and background step aside, and it reports its
+   height upwards so the parent can give it exactly the room it needs. An iframe
+   with its own scrollbar is the thing that makes an embed feel like a pen. */
+(function(){
+  if(!/(\?|&)embed/.test(location.search)) return;
+  document.documentElement.style.background = "transparent";
+  document.body.style.background = "transparent";
+  const css = document.createElement("style");
+  css.textContent = `.note{display:none!important}
+    .wrap{padding-left:0!important;padding-right:0!important;
+          padding-top:0!important;padding-bottom:8px!important;max-width:none!important}`;
+  document.head.appendChild(css);
+
+  const tell = () => parent.postMessage(
+    {embedHeight: Math.ceil(document.documentElement.scrollHeight), from: location.pathname},
+    "*");
+  addEventListener("load", tell);
+  addEventListener("resize", tell);
+  new MutationObserver(tell).observe(document.body, {subtree:true, childList:true, attributes:true});
+  setInterval(tell, 800);
+})();
+</script>

@@ -1,0 +1,349 @@
+<title>Node Matrix</title>
+<style>
+/* Every node on one screen: nine in a 3×3 grid, four cameras each — thirty-six
+   cameras. Sized for a 4K display.
+
+   Palette is deliberately narrow — greys, one amber, one red:
+
+     YR07  Cadmium Orange  #F8980A   active, healthy, stream arriving
+     Y17   Golden Yellow   #FED040   emphasised values
+     R29   Lipstick Red    #D81030   fault, REC
+     greys                           everything at rest
+
+   No green here. Green means *next* on the desk, opposite red for *on air*, and
+   a second meaning for "fine" on this screen would dilute it. A node that is
+   fine is simply lit; one that is not is grey, or red.
+   Text is activity: REC, ON AIR. Those stay on separate channels deliberately —
+   every node in a running show is recording, so if recording were shown in
+   colour the whole wall would be one colour and a failure would have nowhere to
+   appear. A healthy wall is evenly lit and quiet.
+
+   Machine figures are drawn, not listed. Four numbers on four lines read as a
+   paragraph and get skipped; a shape is taken in without reading. */
+:root{
+  --bg:#0C0C0C; --panel:#161615; --raised:#1F1F1E; --line:#2E2E2C;
+  --am:#F8980A;        /* Copic YR07 Cadmium Orange — active, healthy */
+  --hi:#FED040;        /* Copic Y17  Golden Yellow  — emphasised       */
+  --ok:#F8980A;        /* healthy is simply "lit"                      */
+  --ok-dim:#5A3B08;
+  --err:#D81030;       /* Copic R29  Lipstick Red                      */
+  --white:#FFFFFF;
+  --fg:#D8D6D0; --dim:#8E8C86; --faint:#5E5C57; --dead:#333331;
+  --sans:"Helvetica Neue",Helvetica,Roboto,-apple-system,"Segoe UI",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);
+     font-size:13px;padding:22px;-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}
+
+header{display:flex;align-items:baseline;gap:26px;margin-bottom:18px;flex-wrap:wrap}
+h1{margin:0;font-size:20px;color:var(--am);letter-spacing:.14em;font-weight:600}
+.tally{display:flex;gap:22px;font-size:13px;color:var(--dim)}
+.tally b{font-variant-numeric:tabular-nums;font-weight:600;font-size:15px}
+.tally .n-ok   b{color:var(--ok)}
+.tally .n-warn b{color:var(--am)}
+.tally .n-err  b{color:var(--err)}
+.clock{margin-left:auto;color:var(--faint);font-size:12px}
+
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:1500px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+
+.node{background:var(--panel);border:1px solid var(--line);
+      border-left:5px solid var(--dead);border-radius:8px;
+      padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.node.ok   {border-left-color:var(--ok)}
+.node.warn {border-left-color:var(--am)}
+.node.err  {border-left-color:var(--err)}
+.node.gone {opacity:.4}
+
+.top{display:flex;align-items:center;gap:10px}
+.id{font-size:16px;font-weight:600;letter-spacing:.05em}
+.host{font-size:11.5px;color:var(--faint)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--dead);flex:none}
+.node.ok   .dot{background:var(--ok);box-shadow:0 0 9px rgba(248,152,10,.55)}
+.node.warn .dot{background:var(--am);box-shadow:0 0 9px rgba(248,152,10,.6)}
+.node.err  .dot{background:var(--err);box-shadow:0 0 10px rgba(216,16,48,.75)}
+
+.flags{margin-left:auto;display:flex;gap:5px}
+.flag{font-size:9.5px;font-weight:700;letter-spacing:.11em;padding:3px 7px;border-radius:3px}
+.flag.rec{background:var(--err);color:#fff}
+.flag.air{background:#fff;color:#000}
+
+/* Cameras: two per row, a cell per lens. Sixteen streams on a node, and the only
+   place a single missing lens is visible without opening anything. */
+.cams{display:grid;grid-template-columns:1fr 1fr;gap:5px 16px}
+.cam{display:flex;align-items:center;gap:8px}
+.cam .cn{font-size:11.5px;color:var(--dim);width:42px}
+.cam .lenses{display:flex;gap:3px;flex:1}
+/* Arriving is lit, missing is an empty outline. With one accent colour the
+   difference has to be presence versus absence, not hue versus hue. */
+.lens{flex:1;height:10px;border-radius:2px;background:var(--dead);border:1px solid transparent}
+.lens.on{background:var(--ok)}
+.lens.miss{background:transparent;border:1px dashed var(--err)}
+.cam .cs{font-size:10.5px;color:var(--faint);width:26px;text-align:right;
+         font-variant-numeric:tabular-nums}
+
+/* ── The three charts ───────────────────────────────────────────────────── */
+.charts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;
+        border-top:1px solid var(--line);padding-top:11px}
+.chart{display:flex;flex-direction:column;gap:5px}
+.chart .lab{font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
+.chart .big{font-size:19px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.chart .big.warn{color:var(--hi)}
+.chart .big.bad{color:var(--err)}
+.chart .sub{font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.chart svg{display:block;width:100%;height:30px}
+
+/* Storage is a stacked bar: one segment per disk, so a pool of three shows as
+   three and a disk about to fill is visible as a segment, not a sentence. */
+.stack{display:flex;gap:2px;height:11px;border-radius:3px;overflow:hidden;
+       background:var(--line)}
+.stack span{display:block;height:100%}
+.stack .used{background:var(--ok-dim)}
+.stack .free{background:var(--ok)}
+.stack .low  {background:var(--am)}
+.stack .crit {background:var(--err)}
+
+.foot{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);
+      padding-top:10px}
+.proxy{font-size:11.5px;color:var(--dim);flex:1}
+.proxy b{color:var(--ok);font-weight:500}
+.proxy b.warn{color:var(--am)}
+.btn{font-family:var(--sans);font-size:10.5px;font-weight:600;letter-spacing:.06em;
+     padding:6px 11px;border-radius:5px;border:1px solid var(--am);
+     background:transparent;color:var(--am);cursor:pointer;white-space:nowrap}
+.btn:hover{background:rgba(248,152,10,.16)}
+.btn:disabled{border-color:var(--line);color:var(--faint);cursor:default}
+
+.legend{display:flex;gap:22px;flex-wrap:wrap;margin-top:20px;font-size:12px;color:var(--dim)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:7px;
+          vertical-align:-1px}
+.note{margin-top:12px;color:var(--faint);font-size:12px;max-width:82ch;line-height:1.65}
+</style>
+
+<header>
+  <h1>NODES</h1>
+  <div class="tally">
+    <span class="n-ok">healthy <b id="t-ok">0</b></span>
+    <span class="n-warn">attention <b id="t-warn">0</b></span>
+    <span class="n-err">failed <b id="t-err">0</b></span>
+    <span>recording <b id="t-rec">0</b></span>
+    <span>cameras <b id="t-cam">0</b></span>
+    <span>shortest <b id="t-short">—</b></span>
+  </div>
+  <div class="clock" id="clock"></div>
+</header>
+
+<div class="grid" id="grid"></div>
+
+<div class="legend">
+  <span><i style="background:#F8980A"></i>healthy · stream arriving <em style="color:#5E5C57">YR07</em></span>
+  <span><i style="border:1px dashed #D81030;background:transparent"></i>stream missing</span>
+  <span><i style="background:#D81030"></i>failed <em style="color:#5E5C57">R29</em></span>
+  <span><i style="background:#333331"></i>at rest · not answering</span>
+  <span><i style="background:#D81030"></i>REC — writing to disk</span>
+  <span><i style="background:#fff"></i>ON AIR — a camera of this node is on programme</span>
+</div>
+
+<p class="note">
+  Colour is health, text is activity, and they never share a channel. Every node in
+  a running show is recording; if that were shown in colour the whole wall would be
+  one colour and a genuine failure would have nowhere to stand out.
+</p>
+
+<script>
+// Sample fleet. In the app this is what the poller fills from each node's /status;
+// nothing below cares where the numbers came from. `cpuHistory` and `writeHistory`
+// are the last few minutes, oldest first.
+function series(base, spread, n=24){
+  const out=[]; let v=base;
+  for(let i=0;i<n;i++){ v=Math.max(0, v+(Math.random()-0.5)*spread); out.push(v); }
+  return out;
+}
+const NODES = [
+  {id:1, host:"orah-n01", hours:5.4, writeMB:30.1, cpu:38, loadPerCore:0.51, mem:41,
+   encoder:"h264_vaapi", proxies:4, rec:true, air:true,
+   disks:[{name:"REC-A",totalGB:2000,freeGB:412},{name:"REC-B",totalGB:2000,freeGB:1890}],
+   cpuHistory:series(38,9), writeHistory:series(30,3),
+   cams:[{n:1,on:4},{n:2,on:4},{n:3,on:4},{n:4,on:4}]},
+
+  {id:2, host:"orah-n02", hours:6.1, writeMB:29.8, cpu:35, loadPerCore:0.44, mem:39,
+   encoder:"h264_vaapi", proxies:4, rec:true,
+   disks:[{name:"REC-C",totalGB:2000,freeGB:1610}],
+   cpuHistory:series(35,8), writeHistory:series(30,3),
+   cams:[{n:5,on:4},{n:6,on:4},{n:7,on:4},{n:8,on:4}]},
+
+  {id:3, host:"orah-n03", hours:5.9, writeMB:30.4, cpu:36, loadPerCore:0.47, mem:40,
+   encoder:"h264_vaapi", proxies:4, rec:true,
+   disks:[{name:"REC-D",totalGB:2000,freeGB:1550}],
+   cpuHistory:series(36,8), writeHistory:series(30,3),
+   cams:[{n:9,on:4},{n:10,on:4},{n:11,on:4},{n:12,on:4}]},
+
+  {id:4, host:"orah-n04", hours:1.4, writeMB:30.0, cpu:37, loadPerCore:0.49, mem:40,
+   encoder:"h264_vaapi", proxies:4, rec:true, warn:"disk",
+   disks:[{name:"REC-E",totalGB:2000,freeGB:150}],
+   cpuHistory:series(37,8), writeHistory:series(30,3),
+   cams:[{n:13,on:4},{n:14,on:4},{n:15,on:4},{n:16,on:4}]},
+
+  {id:5, host:"orah-n05", hours:6.6, writeMB:29.9, cpu:34, loadPerCore:0.42, mem:38,
+   encoder:"h264_vaapi", proxies:4, rec:true,
+   disks:[{name:"REC-F",totalGB:2000,freeGB:1740}],
+   cpuHistory:series(34,7), writeHistory:series(30,3),
+   cams:[{n:17,on:4},{n:18,on:4},{n:19,on:4},{n:20,on:4}]},
+
+  {id:6, host:"orah-n06", hours:5.2, writeMB:22.6, cpu:33, loadPerCore:0.45, mem:39,
+   encoder:"h264_vaapi", proxies:4, rec:true, warn:"stream",
+   disks:[{name:"REC-G",totalGB:2000,freeGB:1370}],
+   cpuHistory:series(33,7), writeHistory:series(23,6),
+   cams:[{n:21,on:4},{n:22,on:3},{n:23,on:4},{n:24,on:4}]},
+
+  {id:7, host:"orah-n07", hours:7.0, writeMB:30.2, cpu:96, loadPerCore:1.92, mem:71,
+   encoder:null, proxies:0, rec:true, noproxy:true,
+   disks:[{name:"REC-H",totalGB:2000,freeGB:1840}],
+   cpuHistory:series(92,10), writeHistory:series(30,3),
+   cams:[{n:25,on:4},{n:26,on:4},{n:27,on:4},{n:28,on:4}]},
+
+  {id:8, host:"orah-n08", gone:true,
+   cams:[{n:29,on:0},{n:30,on:0},{n:31,on:0},{n:32,on:0}]},
+
+  {id:9, host:"orah-n09", hours:9.9, writeMB:0, cpu:4, loadPerCore:0.08, mem:22,
+   encoder:"h264_vaapi", proxies:0, err:"cameras not publishing",
+   disks:[{name:"REC-J",totalGB:4000,freeGB:2600}],
+   cpuHistory:series(4,2), writeHistory:new Array(24).fill(0),
+   cams:[{n:33,on:0},{n:34,on:0},{n:35,on:0},{n:36,on:0}]},
+];
+
+const worse    = (v,w,b) => v>=b ? "bad" : v>=w ? "warn" : "";
+const worseLow = (v,w,b) => v<=b ? "bad" : v<=w ? "warn" : "";
+
+/** Filled area chart. Reads as a shape: flat is fine, a cliff is not. */
+function spark(values, colour, max){
+  if(!values || !values.length) return "";
+  const w = 100, h = 30, top = max || Math.max(...values, 1) * 1.15;
+  const pts = values.map((v,i) =>
+    (i/(values.length-1)*w).toFixed(2)+","+(h - v/top*h).toFixed(2));
+  return '<svg viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'
+    + '<polygon points="0,'+h+' '+pts.join(" ")+' '+w+','+h+'" fill="'+colour+'" opacity=".22"/>'
+    + '<polyline points="'+pts.join(" ")+'" fill="none" stroke="'+colour+'" '
+    + 'stroke-width="1.4" vector-effect="non-scaling-stroke"/></svg>';
+}
+
+/** One segment per disk, width by capacity, filled by how much is used. */
+function stack(disks){
+  if(!disks || !disks.length) return '<div class="stack"></div>';
+  const total = disks.reduce((a,d)=>a+d.totalGB,0);
+  let out = '<div class="stack">';
+  for(const d of disks){
+    const usedPct = (d.totalGB - d.freeGB) / d.totalGB * 100;
+    const share = d.totalGB / total * 100;
+    const freeRatio = d.freeGB / d.totalGB;
+    const cls = freeRatio < 0.05 ? "crit" : freeRatio < 0.15 ? "low" : "free";
+    out += '<span style="width:'+share+'%;background:transparent;display:flex">'
+         +   '<span class="used" style="width:'+usedPct+'%"></span>'
+         +   '<span class="'+cls+'" style="width:'+(100-usedPct)+'%"></span>'
+         + '</span>';
+  }
+  return out + '</div>';
+}
+
+function tile(n){
+  let c = "node", flags = "";
+  if (n.gone)                   c += " gone";
+  else if (n.err)               c += " err";
+  else if (n.warn || n.noproxy) c += " warn";
+  else                          c += " ok";
+
+  if (n.rec) flags += '<span class="flag rec">REC</span>';
+  if (n.air) flags += '<span class="flag air">ON AIR</span>';
+
+  let cams = "";
+  for (const cam of (n.cams||[])) {
+    let lenses = "";
+    for (let i=0;i<4;i++)
+      lenses += '<span class="lens '+(i<cam.on ? "on" : (n.gone ? "" : "miss"))+'"></span>';
+    cams += '<div class="cam"><span class="cn">cam'+String(cam.n).padStart(2,"0")+'</span>'
+          + '<span class="lenses">'+lenses+'</span>'
+          + '<span class="cs">'+cam.on+'/4</span></div>';
+  }
+
+  if (n.gone) {
+    return '<div class="'+c+'">'
+      + '<div class="top"><span class="dot"></span><span class="id">NODE '
+        + String(n.id).padStart(2,"0")+'</span><span class="host">'+n.host+'</span></div>'
+      + '<div class="cams">'+cams+'</div>'
+      + '<div class="charts"><div class="chart"><span class="lab">state</span>'
+      + '<span class="big bad">not answering</span></div></div>'
+      + '<div class="foot"><span class="proxy">no reply on :8000</span>'
+      + '<button class="btn" disabled>MOUNT DISK</button></div></div>';
+  }
+
+  const freeGB = (n.disks||[]).reduce((a,d)=>a+d.freeGB,0);
+  const totalGB = (n.disks||[]).reduce((a,d)=>a+d.totalGB,0);
+  const hrsCls = worseLow(n.hours, 4, 2);
+  const cpuCls = worse(n.loadPerCore, 0.9, 1.5);
+  const cpuColour = cpuCls==="bad" ? "#D81030" : "#F8980A";
+  const wrtColour = n.writeMB < 1 ? "#D81030" : "#F8980A";
+
+  const charts =
+    '<div class="chart"><span class="lab">cpu</span>'
+      + '<span class="big num '+cpuCls+'">'+n.cpu+'%</span>'
+      + spark(n.cpuHistory, cpuColour, 100)
+      + '<span class="sub">'+n.loadPerCore.toFixed(2)+' per core · '+n.mem+'% mem</span></div>'
+  + '<div class="chart"><span class="lab">storage</span>'
+      + '<span class="big num '+hrsCls+'">'+n.hours.toFixed(1)+' h</span>'
+      + stack(n.disks)
+      + '<span class="sub">'+(freeGB>=1000?(freeGB/1000).toFixed(2)+' TB':freeGB+' GB')
+      + ' free of '+(totalGB/1000).toFixed(0)+' TB</span></div>'
+  + '<div class="chart"><span class="lab">write</span>'
+      + '<span class="big num '+(n.writeMB<1?"bad":"")+'">'+n.writeMB.toFixed(0)+'</span>'
+      + spark(n.writeHistory, wrtColour, 40)
+      + '<span class="sub">MB/s to disk</span></div>';
+
+  const proxy = n.encoder
+    ? '<b>'+n.encoder+'</b> · '+n.proxies+' proxies'
+    : '<b class="warn">no hardware encoder</b> · recording unaffected';
+
+  const fault = n.err
+    ? '<div class="chart" style="grid-column:1/-1"><span class="lab">fault</span>'
+      + '<span class="big bad" style="font-size:15px">'+n.err.toUpperCase()+'</span></div>'
+    : '';
+
+  return '<div class="'+c+'">'
+    + '<div class="top"><span class="dot"></span><span class="id">NODE '
+      + String(n.id).padStart(2,"0")+'</span><span class="host">'+n.host+'</span>'
+      + '<span class="flags">'+flags+'</span></div>'
+    + '<div class="cams">'+cams+'</div>'
+    + '<div class="charts">'+fault+charts+'</div>'
+    + '<div class="foot"><span class="proxy">'+proxy+'</span>'
+    + '<button class="btn" data-node="'+n.id+'">MOUNT DISK</button></div>'
+    + '</div>';
+}
+
+function render(nodes){
+  document.getElementById("grid").innerHTML = nodes.map(tile).join("");
+  const count = f => nodes.filter(f).length;
+  document.getElementById("t-ok").textContent   = count(n=>!n.gone&&!n.err&&!n.warn&&!n.noproxy);
+  document.getElementById("t-warn").textContent = count(n=>!n.gone&&!n.err&&(n.warn||n.noproxy));
+  document.getElementById("t-err").textContent  = count(n=>n.err||n.gone);
+  document.getElementById("t-rec").textContent  = count(n=>n.rec);
+  document.getElementById("t-cam").textContent  = nodes.reduce((a,n)=>a+(n.cams||[]).length,0);
+  // The number that decides whether anyone has to act: whichever node runs out
+  // of disk first takes the whole show's headroom with it.
+  const live = nodes.filter(n=>!n.gone && n.hours!=null);
+  document.getElementById("t-short").textContent =
+    live.length ? Math.min(...live.map(n=>n.hours)).toFixed(1)+" h" : "—";
+  document.getElementById("clock").textContent = new Date().toLocaleTimeString();
+}
+
+// Adding a disk goes to that node's own agent, which appends it to the live pool.
+// Recording is not interrupted.
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-node]");
+  if(!b) return;
+  b.textContent = "MOUNTING…";
+  setTimeout(()=>{ b.textContent = "MOUNT DISK"; }, 1200);
+});
+
+render(NODES);
+</script>

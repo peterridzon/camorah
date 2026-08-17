@@ -1,0 +1,26 @@
+[Unit]
+# Puts the node's status on tty1, so plugging in a monitor shows what it is
+# doing without logging in, opening a browser, or knowing any commands.
+Description=Orah node — status on the console
+After=orah-agent.service
+
+[Service]
+Type=simple
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+
+ExecStart=/bin/sh -c 'while true; do \
+    printf "\\033[2J\\033[H"; \
+    curl -s --max-time 3 http://127.0.0.1:${AGENT_PORT:-8000}/status.txt \
+      || echo "agent not answering"; \
+    sleep 2; \
+  done'
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

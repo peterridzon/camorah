@@ -1,0 +1,30 @@
+[Unit]
+# Receives the cameras and writes them straight to disk. This is the process
+# that must never stop: recording is the one artefact an event cannot reproduce.
+Description=Orah node — RTMP ingest and recording
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@INSTALL_DIR@
+ExecStart=@INSTALL_DIR@/mediamtx @INSTALL_DIR@/mediamtx.yml
+
+Restart=always
+RestartSec=2
+# Never give up. A node that stops retrying after a few failures is a node that
+# quietly misses the rest of the show.
+StartLimitIntervalSec=0
+
+# Recording outranks everything else on this machine.
+Nice=-5
+IOSchedulingClass=realtime
+IOSchedulingPriority=2
+
+# Writing to the recording directory is all it needs.
+ProtectSystem=full
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

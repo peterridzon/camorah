@@ -1,0 +1,391 @@
+<meta charset="utf-8">
+<title>Multiview Generators</title>
+<style>
+  :root{
+    --bg:#0b0b0c; --panel:#141416; --panel2:#1b1b1e; --line:#2a2a2e;
+    --fg:#e8e8ea; --dim:#8a8a90; --faint:#55555c;
+    --prog:#e0202a; --prev:#2fbf62; --amber:#e8a33d; --amberGlow:#ffc766;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1640px;margin:0 auto;padding:16px 16px 40px}
+  .note{color:var(--dim);font-size:13px;margin:0 0 16px;max-width:84ch}
+  .note b{color:var(--fg);font-weight:600}
+  .lbl{font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);
+       white-space:nowrap}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+
+  /* ---------- generators ---------- */
+  .gens{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
+  .gtab{display:flex;align-items:center;gap:9px;background:var(--panel);
+        border:1px solid var(--line);border-radius:9px;padding:8px 12px;cursor:pointer}
+  .gtab.sel{border-color:var(--amber);background:#1d1913}
+  .gtab .dot{width:8px;height:8px;border-radius:50%;background:#3a3a40}
+  .gtab.sel .dot{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+  .gtab b{font:700 12px/1 var(--mono);letter-spacing:.08em}
+  .gtab small{color:var(--dim);font-size:11px}
+  .spacer{flex:1}
+  .iconbtn{background:#232327;border:1px solid var(--line);color:var(--dim);border-radius:7px;
+           padding:7px 11px;font-size:11.5px;cursor:pointer}
+  .iconbtn:hover{color:var(--fg);border-color:#3a3a40}
+  .iconbtn.hot{color:#141417;background:linear-gradient(178deg,#ffd88a,var(--amber));
+               border-color:#4d3208;font-weight:700}
+
+  /* ---------- screen ---------- */
+  .stage{display:grid;grid-template-columns:1fr 300px;gap:12px;align-items:start}
+  .screen{padding:10px}
+  .bezel{background:#000;border-radius:6px;aspect-ratio:16/9;display:grid;gap:2px;padding:2px}
+
+  /* The cell is black ground; the picture inside is a 3:4 portrait, centred.
+     The camera composes 1440x1920 — the side bars are the truth, not a flaw. */
+  .cell{position:relative;background:#000;overflow:hidden;border:2px solid transparent;
+        display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;
+        container-type:size}
+  /* The picture holds 3:4 whatever the cell.
+     This used to be height:100% with max-width:100%, which clipped width in a
+     narrow cell but left height alone — the picture squeezed to 0.59 instead of
+     0.75 and faces came out narrower than they are. This is "contain" written in
+     CSS: take the lesser of the cell's full height and the height its width
+     allows. Bars fall above and below or to the sides; nothing is ever warped. */
+  .pic{position:relative;aspect-ratio:3/4;overflow:hidden;flex:none;
+       height:min(100cqh, calc(100cqw * 4 / 3));
+       background:linear-gradient(160deg,#2c3038 0%,#1a1d22 45%,#0e1013 100%)}
+  .cell.empty .pic{background:#101012}
+  /* On a real 16:9 display the cell cannot take the shape of the signal — the
+     grid is set by the output. So the tally border sits on the picture, not the
+     cell: it frames exactly what goes out, and the black around it is the wall
+     of the monitor, not a frame. */
+  .cell{border-color:transparent !important}
+  .cell.pgm .pic{outline:2px solid var(--prog);outline-offset:-2px}
+  .cell.pvw .pic{outline:2px solid var(--prev);outline-offset:-2px}
+  .cell.free .pic{outline:2px solid var(--amber);outline-offset:-2px}
+  .cap{position:absolute;left:50%;bottom:5px;transform:translateX(-50%);
+       background:rgba(0,0,0,.75);color:var(--amberGlow);
+       font:600 10px/1 -apple-system,sans-serif;
+       letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:3px;
+       white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis}
+  .cell.big .cap{font-size:12px;padding:4px 12px}
+  .cell.nolabel .cap{display:none}
+  .role{position:absolute;left:4px;top:4px;font:700 8.5px/1 var(--mono);letter-spacing:.1em;
+        padding:3px 5px;border-radius:2px;background:rgba(0,0,0,.6);color:#c9c9cf}
+  .cell.pgm .role{background:var(--prog);color:#fff}
+  .cell.pvw .role{background:var(--prev);color:#04240f}
+  .cell.free .role{background:var(--amber);color:#141417}
+  .role.num{background:rgba(0,0,0,.72);color:#fff;font-size:9px;padding:2px 4px}
+  .meter{position:absolute;left:3px;bottom:24px;top:24px;width:8px;display:flex;
+         flex-direction:column-reverse;gap:1px;padding:1px;background:rgba(0,0,0,.5);
+         border-radius:2px}
+  .meter i{flex:1;border-radius:1px;background:#1c2a1e}
+  .cell.nometer .meter{display:none}
+
+  /* Amber mini keys — send this source to one of the four boxes. They live on
+     the source because that is where the operator is looking when choosing. */
+  .send{position:absolute;right:3px;top:3px;display:flex;gap:2px;z-index:2}
+  .send button{width:15px;height:15px;border-radius:3px;cursor:pointer;
+       border:1px solid #6b4d18;background:rgba(20,18,13,.86);color:#b98b45;
+       font:700 8.5px/1 var(--mono);padding:0}
+  .send button:hover{border-color:var(--amber);color:var(--amberGlow)}
+  .send button.on{background:linear-gradient(178deg,#ffd88a,var(--amber));color:#141417;
+       border-color:#ffd88a;box-shadow:0 0 7px rgba(232,163,61,.75)}
+  .send button.off{opacity:.25;cursor:default}
+
+  /* ---------- side ---------- */
+  .side{display:flex;flex-direction:column;gap:12px}
+  .sec{padding:11px}
+  .sec h4{margin:0 0 9px;font:600 10px/1 -apple-system,sans-serif;letter-spacing:.18em;
+          text-transform:uppercase;color:var(--faint)}
+  .bigrow{display:flex;align-items:center;gap:8px;background:#0e0e10;border:1px solid var(--line);
+          border-radius:6px;padding:7px 9px;margin-bottom:6px}
+  .bigrow .k{font:700 9.5px/1 var(--mono);letter-spacing:.08em;width:44px;flex:none}
+  .bigrow.pv .k{color:var(--prev)} .bigrow.pg .k{color:var(--prog)}
+  .bigrow.fr .k{color:var(--amber)}
+  .bigrow .t{flex:1;font-size:11.5px;color:var(--dim);min-width:0;overflow:hidden;
+             text-overflow:ellipsis;white-space:nowrap}
+  .sw{width:34px;height:19px;border-radius:10px;background:#232327;border:1px solid var(--line);
+      position:relative;cursor:pointer;flex:none}
+  .sw i{position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;
+        background:#5a5a62;transition:all .12s}
+  .sw.on{background:#2b2419;border-color:#6b4d18}
+  .sw.on i{left:17px;background:var(--amber);box-shadow:0 0 7px var(--amber)}
+  .sw.lock{opacity:.4;cursor:not-allowed}
+  .picks{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .pick{background:#0e0e10;border:1px solid var(--line);border-radius:6px;padding:5px;
+        cursor:pointer}
+  .pick.sel{border-color:var(--amber)}
+  .pick .mini{display:grid;gap:1.5px;aspect-ratio:16/9}
+  .pick .mini div{background:#37373e;border-radius:1px}
+  .pick .mini div.b{background:#7a7a84}
+  .pick .nm{font-size:9.5px;color:var(--dim);margin-top:4px;text-align:center}
+  .pick.sel .nm{color:var(--amber)}
+  .slot{display:flex;align-items:center;gap:9px;background:#0e0e10;border:1px solid var(--line);
+        border-radius:6px;padding:7px 9px;margin-bottom:6px}
+  .slot .t{flex:1;min-width:0}
+  .slot .t b{display:block;font-size:12px;font-weight:600}
+  .slot .t span{font-size:10.5px;color:var(--faint)}
+  .mini-btn{background:#232327;border:1px solid var(--line);color:var(--dim);border-radius:5px;
+            padding:4px 8px;font-size:10.5px;cursor:pointer}
+  .mini-btn:hover{color:var(--fg)}
+  @media(max-width:1100px){.stage{grid-template-columns:1fr}}
+</style>
+
+<div class="wrap">
+  <p class="note">
+    <b>Design — multiview.</b> Two independent generators, each feeding its own display. The
+    top band holds <b>four boxes</b>: preview and program follow the switcher, the other two are
+    free and can be switched off. Every source carries <b>amber keys 1–4</b> that send it to the
+    matching box.
+  </p>
+
+  <div class="gens" id="gens"></div>
+
+  <div class="stage">
+    <div class="panel screen"><div class="bezel" id="bezel"></div></div>
+
+    <div class="side">
+      <div class="panel sec">
+        <h4>Boxes</h4>
+        <div id="bigs"></div>
+      </div>
+      <div class="panel sec">
+        <h4>Layout</h4>
+        <div class="picks" id="picks"></div>
+      </div>
+      <div class="panel sec">
+        <h4>Saved layouts</h4>
+        <div id="slots"></div>
+        <button class="mini-btn" style="width:100%" onclick="saveState()">+ Save layout</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const REAL = [4,5,7,2,9,12,3,6,10,20,21,22,24];   // units that passed today
+const FLEET = Array.from({length:24},(_,i)=> REAL[i] ?? null);  // full rig
+const NAMES = {2:"Stage L",3:"Stage R",4:"Front",5:"Front L",6:"Crowd",7:"Front R",
+               9:"Drums",10:"Wide",12:"Bar",20:"Balcony",21:"Backstage",22:"Roof",24:"Spare"};
+const INPUTS = 24;    // full rig
+
+/* Layout variants.
+   cols  — grid columns
+   bw/bh — box size in grid cells
+   rows  — rows of sources
+   place — which end the box band sits at
+
+   Cell aspect is the only thing deciding these. The camera is a 3:4 portrait, so
+   on a 16:9 display 24 sources tile best at 8x3 (cell 0.67) — 12x2 would give
+   0.30, a strip nobody can read. Variants carrying boxes therefore hold fewer
+   sources: not because more would not fit, but because below a certain width a
+   source stops telling you anything. That is what the second generator is for —
+   gallery with four boxes on one, the full wall on the other. */
+const VARIANTS = {
+  "wall24":   {n:"24-up wall · 8×3",       cols:8,  rows:3, bigs:0},
+  "wall18":   {n:"18-up wall · 6×3",       cols:6,  rows:3, bigs:0},
+  "big4-top": {n:"4 boxes top + 16",    cols:8,  rows:2, bigs:4, bw:2, bh:2, place:"top"},
+  "big4-bot": {n:"4 boxes bottom + 16",    cols:8,  rows:2, bigs:4, bw:2, bh:2, place:"bottom"},
+  "big2-top": {n:"2 boxes top + 20",    cols:8,  rows:2, bigs:2, bw:2, bh:2, place:"top"},
+  "big2-bot": {n:"2 boxes bottom + 20",    cols:8,  rows:2, bigs:2, bw:2, bh:2, place:"bottom"},
+  "pgm-half": {n:"program half + 12",  cols:8,  rows:2, bigs:1, bw:4, bh:3, place:"top"},
+  "big4-only":{n:"boxes only",          cols:8,  rows:0, bigs:4, bw:2, bh:3, place:"top"}
+};
+
+let gens = [
+  {name:"MULTIVIEW 1", out:"Window · display 2", variant:"big4-top",
+   big:[{role:"pvw",cam:5,on:true},{role:"pgm",cam:4,on:true},
+        {role:"free",cam:9,on:true},{role:"free",cam:20,on:true}],
+   labels:true, meters:true},
+  {name:"MULTIVIEW 2", out:"Window · display 3", variant:"wall24",
+   big:[{role:"pvw",cam:5,on:true},{role:"pgm",cam:4,on:true},
+        {role:"free",cam:null,on:false},{role:"free",cam:null,on:false}],
+   labels:true, meters:false}
+];
+let cur = 0;
+let saved = [
+  {t:"Gallery — show", when:"today 23:58", variant:"big4-top"},
+  {t:"Wall — full rig", when:"today 23:59", variant:"wall24"}
+];
+
+const $ = s => document.querySelector(s);
+const G = () => gens[cur];
+const face = c => c == null ? "—" : `${NAMES[c] || "cam"} · CAM ${String(c).padStart(2,"0")}`;
+const liveBigs = () => G().big.filter(b => b.on);
+
+/* The grid is computed, not hand-drawn. Boxes take their columns and rows;
+   whatever is left over is filled with sources. Switching a box off hands its
+   space back automatically — no second layout to keep in step with the first. */
+function grid(){
+  const g = G(), V = VARIANTS[g.variant];
+  const live = liveBigs();
+  const n = Math.min(live.length, V.bigs || 0);
+  const rows = [];
+
+  if(n > 0){
+    const band = [];
+    for(let r=0;r<V.bh;r++) band.push([]);
+    for(let i=0;i<n;i++)
+      for(let r=0;r<V.bh;r++)
+        for(let c=0;c<V.bw;c++) band[r].push("b"+i);
+    // Whatever is left beside the box band becomes sources — no wasted space.
+    let k = 0;
+    const rest = V.cols - n*V.bw;
+    for(let r=0;r<V.bh;r++) for(let c=0;c<rest;c++) band[r].push("s"+(k++));
+    const tail = [];
+    for(let r=0;r<V.rows;r++){ const row=[]; for(let c=0;c<V.cols;c++) row.push("s"+(k++)); tail.push(row); }
+    if(V.place === "top") rows.push(...band, ...tail); else rows.push(...tail, ...band);
+    return {areas: rows.map(r=>r.join(" ")), smalls: k, cols: V.cols};
+  }
+
+  let k = 0;
+  for(let r=0;r<V.rows;r++){ const row=[]; for(let c=0;c<V.cols;c++) row.push("s"+(k++)); rows.push(row); }
+  return {areas: rows.map(r=>r.join(" ")), smalls: k, cols: V.cols};
+}
+
+function drawGens(){
+  $("#gens").innerHTML = gens.map((g,i)=>`
+    <div class="gtab ${i===cur?"sel":""}" onclick="cur=${i};drawAll()">
+      <span class="dot"></span><b>${g.name}</b>
+      <small>${g.out} · ${VARIANTS[g.variant].n}</small></div>`).join("")
+    + `<span class="spacer"></span>
+       <button class="iconbtn" onclick="alert('Opens as its own window, for a second display.')">⇱ Pop out</button>
+       <button class="iconbtn hot" onclick="G().labels=!G().labels;drawStage()">Aa labels</button>
+       <button class="iconbtn" onclick="G().meters=!G().meters;drawStage()">▮ meters</button>`;
+}
+
+function drawStage(){
+  const g = G(), {areas, smalls, cols} = grid();
+  const bz = $("#bezel");
+  bz.style.gridTemplateAreas = areas.map(r=>`"${r}"`).join(" ");
+  bz.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+  bz.style.gridTemplateRows = `repeat(${areas.length},1fr)`;
+
+  const meter = `<div class="meter">${"<i></i>".repeat(12)}</div>`;
+  let html = "";
+
+  liveBigs().forEach((b,i)=>{
+    const cls = b.role === "pgm" ? "pgm" : b.role === "pvw" ? "pvw" : "free";
+    const tag = b.role === "pgm" ? "PROGRAM" : b.role === "pvw" ? "PREVIEW"
+              : "BIG " + (g.big.indexOf(b) + 1);
+    html += `<div class="cell big ${cls} ${g.labels?"":"nolabel"} ${g.meters?"":"nometer"}"
+                  style="grid-area:b${i}">
+        <div class="pic"><span class="role">${tag}</span>${meter}
+          <div class="cap">${face(b.cam)}</div></div></div>`;
+  });
+
+  for(let k=0;k<smalls;k++){
+    const cam = FLEET[k];
+    if(cam == null){
+      html += `<div class="cell empty" style="grid-area:s${k}"><div class="pic"></div></div>`;
+      continue;
+    }
+    const send = g.big.map((b,j)=>{
+      if(!b.on) return `<button class="off" disabled>${j+1}</button>`;
+      const on = b.cam === cam;
+      return `<button class="${on?"on":""}" onclick="sendTo(${j},${cam})"
+                title="Send to box ${j+1}">${j+1}</button>`;
+    }).join("");
+    html += `<div class="cell ${g.labels?"":"nolabel"} nometer" style="grid-area:s${k}">
+        <div class="pic"><span class="role num">${String(cam).padStart(2,"0")}</span>
+          <div class="send">${send}</div>
+          <div class="cap">${(NAMES[cam]||"cam"+cam)}</div></div></div>`;
+  }
+  bz.innerHTML = html;
+  paintMeters();
+}
+
+function sendTo(j,cam){ G().big[j].cam = cam; drawStage(); drawBigs(); }
+
+function drawBigs(){
+  const g = G();
+  $("#bigs").innerHTML = g.big.map((b,i)=>{
+    const cls = b.role === "pgm" ? "pg" : b.role === "pvw" ? "pv" : "fr";
+    const key = b.role === "pgm" ? "PGM" : b.role === "pvw" ? "PVW" : "BIG " + (i+1);
+    const locked = b.role !== "free";
+    return `<div class="bigrow ${cls}"><span class="k">${key}</span>
+      <span class="t">${locked ? face(b.cam) + " — from switcher" : face(b.cam)}</span>
+      <div class="sw ${b.on?"on":""} ${locked?"lock":""}"
+           onclick="${locked?"":`toggleBig(${i})`}"><i></i></div></div>`;
+  }).join("");
+}
+function toggleBig(i){ G().big[i].on = !G().big[i].on; drawAll(); }
+
+function miniOf(key){
+  const V = VARIANTS[key];
+  const rows = V.bigs ? (V.bh + V.rows) : V.rows;
+  let out = `<div class="mini" style='grid-template-columns:repeat(${V.cols},1fr);`
+          + `grid-template-rows:repeat(${rows},1fr)'>`;
+  const cell = (b,w,h) => `<div class="${b?"b":""}" style="grid-column:span ${w};grid-row:span ${h}"></div>`;
+  const band = [];
+  for(let i=0;i<(V.bigs||0);i++) band.push(cell(true,V.bw,V.bh));
+  const rest = V.cols - (V.bigs||0)*(V.bw||0);
+  for(let r=0;r<(V.bigs?V.bh:0);r++) for(let c=0;c<rest;c++) band.push(cell(false,1,1));
+  const tail = [];
+  for(let r=0;r<V.rows;r++) for(let c=0;c<V.cols;c++) tail.push(cell(false,1,1));
+  out += (V.bigs && V.place === "bottom") ? tail.join("")+band.join("") : band.join("")+tail.join("");
+  return out + `</div>`;
+}
+
+function drawPicks(){
+  $("#picks").innerHTML = Object.entries(VARIANTS).map(([k,V])=>{
+    const slots = (V.bigs ? (V.cols - V.bigs*V.bw) * V.bh : 0) + V.cols * V.rows;
+    return `<div class="pick ${k===G().variant?"sel":""}" onclick="G().variant='${k}';drawAll()">
+              ${miniOf(k)}<div class="nm">${V.n}</div>
+              <div class="nm" style="opacity:.6">${slots} sources</div></div>`;
+  }).join("");
+}
+
+function drawSlots(){
+  $("#slots").innerHTML = saved.map((st,i)=>`
+    <div class="slot"><div class="t"><b>${st.t}</b>
+      <span>${VARIANTS[st.variant].n} · ${st.when}</span></div>
+      <button class="mini-btn" onclick="recall(${i})">Recall</button></div>`).join("");
+}
+function recall(i){ G().variant = saved[i].variant; drawAll(); }
+function saveState(){
+  saved.unshift({t:`Layout ${saved.length+1}`, when:new Date().toTimeString().slice(0,5),
+                 variant:G().variant});
+  drawSlots();
+}
+
+function paintMeters(){
+  document.querySelectorAll(".meter").forEach(m=>{
+    const lit = 3 + Math.floor(Math.random()*7);
+    [...m.children].forEach((i,k)=>{
+      i.style.background = k < lit
+        ? (k > 9 ? "#e0202a" : k > 7 ? "hsl(34 92% 52%)" : "#2fbf62") : "#1c2a1e";
+    });
+  });
+}
+setInterval(paintMeters, 700);
+
+function drawAll(){ drawGens(); drawStage(); drawBigs(); drawPicks(); drawSlots(); }
+drawAll();
+</script>
+
+<script>
+/* Embedded mode.
+   When this page is shown inside the site it is not a demo in a box — it is the
+   page. So its own intro, padding and background step aside, and it reports its
+   height upwards so the parent can give it exactly the room it needs. An iframe
+   with its own scrollbar is the thing that makes an embed feel like a pen. */
+(function(){
+  if(!/(\?|&)embed/.test(location.search)) return;
+  document.documentElement.style.background = "transparent";
+  document.body.style.background = "transparent";
+  const css = document.createElement("style");
+  css.textContent = `.note{display:none!important}
+    .wrap{padding-left:0!important;padding-right:0!important;
+          padding-top:0!important;padding-bottom:8px!important;max-width:none!important}`;
+  document.head.appendChild(css);
+
+  const tell = () => parent.postMessage(
+    {embedHeight: Math.ceil(document.documentElement.scrollHeight), from: location.pathname},
+    "*");
+  addEventListener("load", tell);
+  addEventListener("resize", tell);
+  new MutationObserver(tell).observe(document.body, {subtree:true, childList:true, attributes:true});
+  setInterval(tell, 800);
+})();
+</script>

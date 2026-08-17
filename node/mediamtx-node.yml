@@ -1,0 +1,81 @@
+# MediaMTX for a recording node.
+#
+# The cameras publish here and this same process writes them to disk. No ffmpeg,
+# no second RTMP hop, no transcode — the packets arrive and land on the SSD.
+# That was how the original Orah setup worked too (nginx-rtmp with a `recorder`
+# block, see nginx_file/nginx.conf); this is the same idea with software that is
+# still maintained.
+
+logLevel: info
+logDestinations: [stdout]
+
+rtmp: yes
+rtmpAddress: :1935
+
+api: yes
+apiAddress: :9997
+
+# Nothing else is needed on a node. The Mac pulls program and preview over RTMP
+# and the proxy is published back here by the agent.
+hls: no
+webrtc: no
+srt: no
+rtsp: no
+
+# On by default in v1.20, and it wants to write a TLS keypair into the working
+# directory. If that write fails MediaMTX shuts down every listener it has,
+# recording included — so it is turned off rather than left to chance.
+moq: no
+
+# The Orah opens all four of its RTMP connections at once and sends the publish
+# command on them much later — measured at over 30s on a camera that was
+# otherwise healthy. Whatever is still silent when this expires gets cut, and
+# the camera answers by tearing down and restarting the whole set, which looks
+# exactly like broken hardware. The original Orah setup ran nginx-rtmp, which is
+# far more forgiving here. Two minutes is generous on purpose: the only thing it
+# costs is noticing a genuinely dead publisher later.
+readTimeout: 120s
+writeTimeout: 120s
+
+# Room for the writer to absorb a disk hiccup without dropping packets.
+writeQueueSize: 2048
+
+pathDefaults:
+  source: publisher
+
+  # ── Recording ──────────────────────────────────────────────────────────────
+  record: yes
+  recordPath: /var/lib/orah/recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+
+  # fMP4 is written as a chain of small parts, so a power cut costs the last
+  # part and nothing else — the file before it stays playable. MPEG-TS survives
+  # equally well but plays back less conveniently.
+  recordFormat: fmp4
+  recordPartDuration: 1s
+
+  # Segment length is chosen to keep each file under 3 GB, so recordings can be
+  # copied onto anything without hitting a filesystem or transfer limit.
+  #
+  # MediaMTX splits by time, not size, so the duration comes from the measured
+  # bitrate (MEASUREMENTS M2: ~15 Mbit/s per stream):
+  #
+  #     15 Mbit/s = 1.875 MB/s
+  #     3 GB / 1.875 MB/s ≈ 28.6 min
+  #
+  # 25 minutes leaves margin: about 2.8 GB at the measured rate, and still under
+  # 3 GB even if a busy scene pushes the bitrate higher.
+  recordSegmentDuration: 25m
+
+  # Never delete anything automatically. Recordings are the one artefact of an
+  # event that cannot be recreated.
+  recordDeleteAfter: 0s
+
+paths:
+  # Proxy streams are a live convenience for the multiview, not an artefact of
+  # the event. Recording them would waste disk on a throwaway 480×270 copy of
+  # footage already being written at full quality alongside it.
+  # More specific patterns must come first; all_others is the catch-all.
+  "~^.*/proxy$":
+    record: no
+
+  all_others:
