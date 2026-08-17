@@ -50,6 +50,11 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BINARY" "$APP/Contents/MacOS/$APP_NAME"
 
+# The icon. Without it the Dock shows a blank sheet of paper, which reads as
+# "something failed to build" even when nothing did.
+mkdir -p "$APP/Contents/Resources"
+cp "$HERE/Resources/4idesk.icns" "$APP/Contents/Resources/" 2>/dev/null || true
+
 # ── Info.plist ────────────────────────────────────────────────────────────────
 #
 # NSLocalNetworkUsageDescription and NSBonjourServices are not optional here:
@@ -63,6 +68,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleName</key>                 <string>$APP_NAME</string>
     <key>CFBundleDisplayName</key>          <string>$APP_NAME</string>
     <key>CFBundleExecutable</key>           <string>$APP_NAME</string>
+    <key>CFBundleIconFile</key>             <string>4idesk</string>
     <key>CFBundleIdentifier</key>           <string>$BUNDLE_ID</string>
     <key>CFBundlePackageType</key>          <string>APPL</string>
     <key>CFBundleShortVersionString</key>   <string>$VERSION</string>

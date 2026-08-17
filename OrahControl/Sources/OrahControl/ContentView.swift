@@ -20,13 +20,17 @@ struct ContentView: View {
             case .colour:
                 ColourView()
             case .desk:
+                // Multiview over console, the way the eye works: what is
+                // available, then what puts it to air. The rail keeps the parts
+                // of setup that a show still needs at hand.
                 HStack(spacing: 0) {
-                    VStack(spacing: 14) {
-                        DeskView()
-                        MultiviewGrid()
-                        Spacer(minLength: 0)
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            MultiviewPane()
+                            ConsoleView()
+                        }
+                        .padding(12)
                     }
-                    .padding(14)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     Divider().overlay(Theme.line)

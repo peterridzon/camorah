@@ -86,6 +86,20 @@ public struct AppConfig: Codable, Sendable, Equatable {
     /// Friendly labels per slot, e.g. 1 → "Stage left".
     public var cameraLabels: [String: String] = [:]
 
+    /// Which camera sits under which key on the desk, by serial.
+    ///
+    /// A button number is not a camera number. On the desk you want them left
+    /// to right in the order they stand on site, and that order has nothing to
+    /// do with how the rig happens to be numbered. Keyed by serial for the same
+    /// reason grades are: it has to survive a renumbering.
+    public var buttonAssignments: [String: String] = [:]
+
+    /// What a key reads: the camera's name, or its number.
+    public var keyLegend: String = "name"
+
+    /// The two free multiview boxes, four sources each, by serial.
+    public var multiviewBoxes: [[String]] = [[], []]
+
     /// Colour correction, keyed by camera **serial** rather than by slot.
     ///
     /// A grade describes a physical camera — its sensor, its age, how it

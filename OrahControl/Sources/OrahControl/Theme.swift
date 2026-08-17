@@ -41,6 +41,12 @@ enum Theme {
     static let amberGlow = Color(hex: 0xFFC766)
     static let keyBody   = Color(hex: 0x26221A)
 
+    /// The unlit key. Dark body, so the amber frame and the lamp carry the
+    /// meaning rather than the fill.
+    static let keyGradient = LinearGradient(
+        colors: [Color(hex: 0x26221A), Color(hex: 0x1B1813), Color(hex: 0x221E17)],
+        startPoint: .top, endPoint: .bottom)
+
     static let amberGradient = LinearGradient(
         colors: [Color(hex: 0xFFE0A6), amberGlow, Color(hex: 0xC9832A), amber],
         startPoint: .top, endPoint: .bottom)

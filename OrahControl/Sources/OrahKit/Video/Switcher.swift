@@ -58,6 +58,15 @@ public final class Switcher: @unchecked Sendable {
     /// What each camera's picture is doing before it reaches the mix. Absent
     /// means neutral, which is the case that costs nothing.
     private var grades: [Int: ColourGrade] = [:]
+
+    /// A camera being looked at while it is shaded.
+    ///
+    /// Grading without seeing the picture is guessing, and the camera being
+    /// graded is usually neither on air nor in preview — that is the whole
+    /// point of shading it before you cut to it. So the pump makes one extra
+    /// picture for whoever is watching, and only while somebody is.
+    private var inspectSlot: Int?
+    private var inspectBypass = false
     private var encoders: [H264Encoder?] = Array(repeating: nil, count: 4)
     private var outputs: [FFmpegOutput?] = Array(repeating: nil, count: 4)
 
@@ -138,6 +147,15 @@ public final class Switcher: @unchecked Sendable {
     public func grade(slot: Int) -> ColourGrade {
         lock.withLock { grades[slot] } ?? ColourGrade()
     }
+
+    /// Which camera the colour panel is watching, and whether it wants the
+    /// picture before or after the grade. `nil` costs nothing at all.
+    public func inspect(slot: Int?, bypass: Bool = false) {
+        lock.withLock { inspectSlot = slot; inspectBypass = bypass }
+    }
+
+    /// The inspected camera's four lenses, graded unless bypassed.
+    public var onInspectFrames: (([CVPixelBuffer?]) -> Void)?
 
     public func removeSource(slot: Int) {
         lock.withLock { buffers[slot] = nil; grades[slot] = nil }
@@ -368,6 +386,21 @@ public final class Switcher: @unchecked Sendable {
             } catch {
                 Log.warn("switch", "lane \(Self.lenses[lens]): \(error)")
             }
+        }
+
+        // The camera under the colour panel, if it is not already one of the
+        // two being composited. Four lenses, so a whole camera can be judged.
+        if let watch = lock.withLock({ inspectSlot }), let tap = onInspectFrames {
+            let bypass = lock.withLock { inspectBypass }
+            let grade = bypass ? nil : lock.withLock { grades[watch] }
+            var pictures = [CVPixelBuffer?](repeating: nil, count: 4)
+            for lens in 0..<4 {
+                guard let frame = lock.withLock({ buffers[watch]?[lens] })?.current() else { continue }
+                pictures[lens] = grade.map { g in
+                    (try? graders[lens].grade(frame.pixelBuffer, with: g)) ?? frame.pixelBuffer
+                } ?? frame.pixelBuffer
+            }
+            tap(pictures)
         }
 
         if let outputTap, let outputPictures {

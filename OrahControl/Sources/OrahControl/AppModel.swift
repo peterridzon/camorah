@@ -420,6 +420,12 @@ final class AppModel {
                     self.outputSinks[index].push(frame)
                 }
             }
+            switcher.onInspectFrames = { [weak self] pictures in
+                guard let self else { return }
+                for (lens, picture) in pictures.enumerated() where lens < self.inspectSinks.count {
+                    self.inspectSinks[lens].push(picture)
+                }
+            }
             switcher.start()
             self.switcher = switcher
             restoreGrades()
@@ -1006,6 +1012,31 @@ final class AppModel {
         }
     }
 
+    /// CUT, whatever the transition style says.
+    ///
+    /// A cut button that dissolves because a style was left selected is the
+    /// kind of surprise a desk must never produce, so this does not consult
+    /// `transitionIsCut` at all.
+    func cut() {
+        guard previewSlot != nil else { return }
+        transitionTask?.cancel()
+        mix = 0
+        swap()
+    }
+
+    /// Pressing a key on the programme bus. The bus is always live, so this
+    /// goes to air immediately — that is what makes it the programme bus.
+    func takeToAir(_ slot: Int) {
+        guard slot != programSlot else { return }
+        transitionTask?.cancel()
+        mix = 0
+        if previewSlot == slot { previewSlot = programSlot }
+        programSlot = slot
+        switcher?.setMix(0)
+        syncDesk()
+        Log.info("desk", "cam\(slot) taken to air from the programme bus")
+    }
+
     /// The T-bar, or a MIDI fader. Reaching the end completes the transition.
     func setMix(_ value: Double) {
         transitionTask?.cancel()
@@ -1298,7 +1329,107 @@ final class AppModel {
         }
     }
 
+    // MARK: - The desk
+
+    /// How many keys each bus has. Two rows of twelve, because that is what a
+    /// hand can cross without looking and what twenty-four cameras need.
+    static let keysPerBus = 24
+
+    /// Which camera is under each key. Empty positions are kept, not closed up:
+    /// a gap in the middle of a bus is a position somebody's finger remembers.
+    var buttons: [Camera?] {
+        var out = [Camera?](repeating: nil, count: Self.keysPerBus)
+        var unplaced = cameras.sorted { $0.slot < $1.slot }
+
+        // Anything explicitly assigned goes where it was put.
+        for (key, serial) in configuration.buttonAssignments {
+            guard let index = Int(key), index >= 0, index < out.count,
+                  let found = unplaced.firstIndex(where: { $0.serial == serial })
+            else { continue }
+            out[index] = unplaced.remove(at: found)
+        }
+        // The rest fall into the first free keys, in rig order, so a fresh
+        // install is usable before anybody has assigned anything.
+        for camera in unplaced {
+            guard let free = out.firstIndex(where: { $0 == nil }) else { break }
+            out[free] = camera
+        }
+        return out
+    }
+
+    func assign(button index: Int, to serial: String?) {
+        _ = ConfigStore.shared.mutate { config in
+            config.buttonAssignments = config.buttonAssignments.filter { $0.value != serial }
+            if let serial { config.buttonAssignments[String(index)] = serial }
+            else { config.buttonAssignments[String(index)] = nil }
+        }
+        configuration = ConfigStore.shared.config
+    }
+
+    var keyLegendIsName: Bool { configuration.keyLegend != "number" }
+
+    func setKeyLegend(name: Bool) {
+        _ = ConfigStore.shared.mutate { $0.keyLegend = name ? "name" : "number" }
+        configuration = ConfigStore.shared.config
+    }
+
+    /// What a key reads. One line, capitals — two lines of small type on a
+    /// square is unreadable at arm's length.
+    func legend(for camera: Camera) -> String {
+        keyLegendIsName ? camera.name.uppercased()
+                        : String(format: "CAM %02d", camera.slot)
+    }
+
+    // MARK: - Multiview boxes
+
+    /// The four large boxes. The first two follow the desk; the other two are
+    /// free, hold four sources each, and can be switched off.
+    var freeBoxes: [[Camera]] {
+        configuration.multiviewBoxes.map { serials in
+            serials.compactMap { serial in cameras.first { $0.serial == serial } }
+        }
+    }
+
+    var boxIsOn: [Bool] {
+        configuration.multiviewBoxes.map { !$0.isEmpty }
+    }
+
+    /// Drops a camera into the first free quadrant of a box, or pushes out the
+    /// oldest when all four are taken. Sending one that is already there takes
+    /// it out again, so the same key both adds and removes.
+    func sendToBox(_ box: Int, serial: String) {
+        _ = ConfigStore.shared.mutate { config in
+            guard box < config.multiviewBoxes.count else { return }
+            var slots = config.multiviewBoxes[box]
+            if let existing = slots.firstIndex(of: serial) { slots.remove(at: existing) }
+            else if slots.count >= 4 { slots.removeFirst(); slots.append(serial) }
+            else { slots.append(serial) }
+            config.multiviewBoxes[box] = slots
+        }
+        configuration = ConfigStore.shared.config
+    }
+
+    func boxContains(_ box: Int, serial: String) -> Bool {
+        guard box < configuration.multiviewBoxes.count else { return false }
+        return configuration.multiviewBoxes[box].contains(serial)
+    }
+
     // MARK: - Colour
+
+    /// The four lenses of whichever camera the colour panel is watching.
+    ///
+    /// Shading without seeing the picture is guessing, and the camera being
+    /// shaded is usually neither on air nor in preview — that is the point of
+    /// doing it before you cut to it. These are fed only while the panel is
+    /// open, so they cost nothing the rest of the time.
+    let inspectSinks = (0..<4).map { _ in VideoSink() }
+
+    /// Tells the switcher which camera to make a picture of, and whether to
+    /// show it before or after its grade.
+    func watch(slot: Int?, bypass: Bool = false) {
+        switcher?.inspect(slot: slot, bypass: bypass)
+        if slot == nil { for sink in inspectSinks { sink.push(nil) } }
+    }
 
     /// The grade for a camera, by slot. Neutral when it has never been touched.
     func grade(slot: Int) -> ColourGrade {

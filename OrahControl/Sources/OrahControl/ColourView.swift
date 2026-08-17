@@ -128,6 +128,57 @@ struct ColourView: View {
         }
     }
 
+    /// The camera being shaded, all four lenses, live.
+    ///
+    /// Shading against a memory of what the picture looked like is guessing.
+    /// Four lenses rather than one because a camera is four sensors and they do
+    /// not always match each other either — a correction that fixes the front
+    /// can easily wreck the one facing the lights.
+    private var pictures: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 9) {
+                Text(showsGraded ? "GRADED" : "BYPASS")
+                    .font(Theme.label(9.5)).tracking(2)
+                    .foregroundStyle(showsGraded ? Theme.amber : Theme.dim)
+                Text(current.map { model.camera(slot: $0)?.name.uppercased() ?? "—" } ?? "—")
+                    .font(Theme.value(10)).foregroundStyle(Theme.faint)
+                Spacer()
+                Text("all four lenses")
+                    .font(Theme.label(9)).tracking(1.2).foregroundStyle(Theme.dead)
+            }
+
+            // Four across, above the wheels. The picture is what the eye is on
+            // while the hand works, so it sits over the controls rather than
+            // beside them — anything to the side of a wheel competes with it.
+            HStack(spacing: 5) {
+                ForEach(0..<4, id: \.self) { lens in
+                    ZStack(alignment: .bottomLeading) {
+                        Rectangle().fill(.black)
+                        VideoView(sink: model.inspectSinks[lens], lens: lens)
+                        Text(Switcher.lenses[lens])
+                            .font(Theme.value(9)).foregroundStyle(Theme.amberGlow)
+                            .padding(.horizontal, 4).padding(.vertical, 1.5)
+                            .background(Color.black.opacity(0.72))
+                            .clipShape(RoundedRectangle(cornerRadius: 2))
+                            .padding(4)
+                    }
+                    .aspectRatio(1440.0/1920.0, contentMode: .fit)
+                    .frame(maxHeight: 300)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 5).stroke(Theme.line, lineWidth: 1)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        // The switcher only makes these pictures while somebody is looking.
+        .onAppear { model.watch(slot: current, bypass: !showsGraded) }
+        .onDisappear { model.watch(slot: nil) }
+        .onChange(of: current) { model.watch(slot: current, bypass: !showsGraded) }
+        .onChange(of: showsGraded) { model.watch(slot: current, bypass: !showsGraded) }
+    }
+
     // MARK: - Shading panel
 
     private var shading: some View {
@@ -233,6 +284,8 @@ struct ColourView: View {
 
     private var trim: some View {
         VStack(alignment: .leading, spacing: 14) {
+            pictures
+
             HStack(alignment: .top, spacing: 12) {
                 wheel("LIFT", \.lift, range: -0.5...0.5, base: 0)
                 wheel("GAMMA", \.gammaRGB, range: -0.5...0.5, base: 0)
