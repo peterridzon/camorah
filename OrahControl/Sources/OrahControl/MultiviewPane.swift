@@ -63,7 +63,10 @@ struct MultiviewPane: View {
     }
 
     private func generatorTab(_ number: Int) -> some View {
-        let selected = number == generator
+        // A generator that is live — open in a window, or this one — wears the
+        // amber frame. The word OPEN said the same thing twice; the frame
+        // already means "this one is running" everywhere else on the desk.
+        let selected = number == generator || model.detachedMultiviews.contains(number)
         return HStack(spacing: 9) {
             Circle()
                 .fill(selected ? Theme.amber : Theme.dead)
@@ -73,13 +76,7 @@ struct MultiviewPane: View {
                 .font(.system(size: 12, weight: .bold, design: .monospaced)).tracking(1.4)
             Text("\(model.output(for: number)) · \(model.layout(for: number).title)")
                 .font(Theme.value(11)).foregroundStyle(Theme.dim)
-            if model.detachedMultiviews.contains(number) {
-                Text("OPEN").font(Theme.label(8)).tracking(1)
-                    .foregroundStyle(Color(hex: 0x141417))
-                    .padding(.horizontal, 5).padding(.vertical, 2)
-                    .background(Theme.amber)
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
-            }
+
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(RoundedRectangle(cornerRadius: 9)
