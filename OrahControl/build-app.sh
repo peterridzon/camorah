@@ -30,7 +30,7 @@ done
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE"
 
-APP_NAME="4i Studio"
+APP_NAME="4idesk"
 # Unchanged on purpose. macOS ties the Local Network permission to the
 # bundle identifier, and losing it means the app silently finds no
 # cameras until someone re-grants it. The name on the window is not

@@ -12,11 +12,11 @@ import Foundation
 /// thing that asks for a path carries the old folder over.
 public enum AppPaths {
 
-    public static let name = "4i Studio"
+    public static let name = "4idesk"
 
     /// Every name this app has shipped under, newest first. Never shorten this
     /// list — an operator who skipped a version still has the oldest folder.
-    private static let previousNames = ["Orah Live Studio", "Orah Control"]
+    private static let previousNames = ["4i Studio", "Orah Live Studio", "Orah Control"]
 
     /// `~/Library/Application Support/<name>`, carried over from any earlier name.
     public static let support: URL = {

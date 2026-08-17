@@ -10,7 +10,7 @@ let args = Array(CommandLine.arguments.dropFirst())
 
 func usage() -> Never {
     print("""
-    orahctl — 4i Studio command line
+    orahctl — 4idesk command line
 
     USAGE:
       orahctl selftest                    Protocol codec conformance checks

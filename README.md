@@ -1,16 +1,29 @@
-# 4i Studio
+<div align="center">
+
+# 4idesk
 
 ### Multicam 360°, cut live, out in 4K.
 
 A vision mixer for immersive shows: twenty-four cameras on one desk, cut and
-shaded in real time, stitched to a full 4K sphere on the way out. Resolution is
-not baked in — the desk scales with the cameras you put in front of it, to 8K
-and beyond.
+shaded in real time, stitched to a full 4K sphere on the way out.<br>
+Resolution is not baked in — the desk scales with the cameras you put in front
+of it, to 8K and beyond.
 
-🌐 **[4istudio.tv](https://4istudio.tv)** — every design on that site is live,
-not a screenshot: click the buses, drag the T-bar, switch layouts.
+**[4idesk.com](https://4idesk.com)** ·
+[Download](https://github.com/peterridzon/camorah/releases) ·
+[Documentation](#documentation)
 
-![The console](docs/ui/console.png)
+| 4K | 16K | 24 | 0 |
+|:--:|:---:|:--:|:-:|
+| stitched output | ceiling by design | cameras, live | vendor software |
+
+</div>
+
+> Every design on [4idesk.com](https://4idesk.com) is **live, not a
+> screenshot** — click the buses, drag the T-bar, switch layouts. The same
+> files are in [`docs/ux/`](docs/ux/); open any of them in a browser.
+
+![The website](docs/ui/hero.png)
 
 ---
 
@@ -24,25 +37,29 @@ and it is the stitcher that decides how big it comes out.
 
 | | | |
 |---|---|---|
-| **Today** | 4K sphere | Twenty-four Orah 4i, four lenses each at 1920×1440. Proven end to end |
-| **Tomorrow** | 8K and 16K | The ceiling is the hardware decoder and the stitcher, never the application |
-| **Any camera** | Not an Orah tool | Orah is what it was built against because that fleet exists and its maker does not. Anything that publishes RTMP fits |
+| **Today** — 4K sphere | Twenty-four Orah 4i, four lenses each at 1920×1440 | proven end to end |
+| **Tomorrow** — 8K, 16K | Put larger sensors in front of it and the same desk carries them | the ceiling is the decoder and the stitcher, never the application |
+| **Any camera** | Orah is what it was built against because that fleet exists and its maker does not | anything that publishes RTMP fits |
 
 ---
 
 ## The whole show, from the truss to the audience
 
-![Signal flow](docs/ui/signalflow.png)
+[▶ Live and clickable](https://4idesk.com/signalflow.html) · [source](docs/web/signalflow.html)
 
-```
-Orah 4i ×24 ──RTMP──▶ PoE switch ──▶ HP mini ×4 ──┬──▶ ISO on disk  (stream copy)
-                                                  └──▶ proxy ──fibre──▶ Mac
-                     Mac ──▶ colour ──▶ Metal dissolve ──4×RTMP──▶ Vahana ──▶ 4K
-                     Mac ◀──────────── control · 9989 ────────────▶ cameras
-```
+![Signal flow](docs/ui/signalflow.png)
 
 The two paths that leave a node never meet again: one carries the show, the
 other carries the recording, and nothing on the desk can reach the second one.
+
+| Layer | Built with |
+|---|---|
+| Camera control | Hand-written protobuf over WebSocket, port 9989 |
+| Discovery | Bonjour where it works, ARP by OUI where it does not |
+| Transport | MediaMTX, config generated per run |
+| Decode / encode | VideoToolbox, hardware both ways |
+| Mix and colour | Metal, one pass |
+| Recording | Node agent, stream copy |
 
 ---
 
@@ -54,8 +71,8 @@ stitching box used to assemble into a 4K sphere. Orah is gone: the update
 servers are dead, the boxes were unstable, and there is no way to buy a
 replacement for either.
 
-There is, however, a shelf of cameras that still work. So the software was
-rebuilt around them — from the wire up, with no vendor library and nothing to
+There is, however, a shelf of cameras that still work — so the software was
+rebuilt around them, from the wire up, with no vendor library and nothing to
 phone home to.
 
 | | |
@@ -63,6 +80,62 @@ phone home to.
 | **Finds them** | ARP sweep by Orah's own MAC prefix. Bonjour is multicast, and multicast from a wireless client to wired cameras is exactly what access points drop |
 | **Keeps them** | Presence decided by the burned-in MAC, never by an open port — a recycled DHCP lease can never make one camera look like another |
 | **Runs them** | CamAPI protobuf over WebSocket, implemented from the wire up and paced so the firmware survives it |
+
+---
+
+## The desk
+
+[▶ Live and clickable](https://4idesk.com/#desk) · [source](docs/ux/switcher.html)
+
+Twelve plus twelve keys on each bus, square and aligned, with the assignment
+between button and camera done once at rig time. Program is always live;
+preview is what CUT, AUTO or the T-bar takes next. Console and multiview are
+two windows of one application — docked they share a frame, either undocks onto
+its own display.
+
+![The console](docs/ui/console.png)
+
+---
+
+## Multiview
+
+[▶ Live and clickable](https://4idesk.com/#multiview) · [source](docs/ux/multiview.html)
+
+Two independent generators, one per screen. Twenty-four portrait cameras tile
+properly at 8×3 on a 16:9 panel and nowhere else — which is why there are two
+of them rather than one crowded one. Boxes 3 and 4 are quad splits; preview and
+program stay whole.
+
+![Multiview](docs/ui/multiview.png)
+
+---
+
+## Colour, per camera, on the live path only
+
+[▶ Live and clickable](https://4idesk.com/#colour) · [source](docs/ux/colour.html)
+
+The cameras do not match each other, so correction is per unit and never
+global. An exposure lever and a two-axis puck — gamma across, master black up
+and down — carry most of the work, exactly as on a remote control panel.
+
+None of it reaches the camera: the Orah protocol has no exposure or gamma
+control, so all of it happens in the Metal pass. **The ISO recording never sees
+any of it.**
+
+![Colour correction](docs/ui/colour.png)
+
+---
+
+## Rig check
+
+[▶ Live and clickable](https://4idesk.com/#rig) · [source](docs/ux/rig-check.html)
+
+Install day is a different job from show day. One question per camera: is it
+there, is it talking, is it sending. **FIX** takes a unit out of the
+conversation entirely while someone is recabling it; **INSTALL** binds whatever
+is on the bench to a number without unplugging anything.
+
+![Rig check](docs/ui/rigcheck.png)
 
 ---
 
@@ -86,26 +159,12 @@ phone home to.
 
 ---
 
-## Colour: per camera, on the live path only
-
-![Colour correction](docs/ui/colour.png)
-
-The cameras do not match each other, so correction is per unit and never
-global. An exposure lever and a two-axis puck — gamma across, master black up
-and down — carry most of the work, exactly as on a remote control panel.
-
-None of it reaches the camera: the Orah protocol has no exposure or gamma
-control, so all of it happens in the Metal pass. **The ISO recording never sees
-any of it.**
-
----
-
 ## Getting started
 
 ```bash
 brew install ffmpeg mediamtx      # the only two dependencies
 cd OrahControl && ./build-app.sh  # builds the .app — no Xcode needed
-open "build/4i Studio.app"
+open "build/4idesk.app"
 ```
 
 There is nothing to configure. Power the cameras, open the app, and it finds
@@ -121,11 +180,13 @@ orahctl fleet              # rebuild the fleet sheet from the records
 
 ## From a box of cameras to a show
 
+The same eight steps, with the interface beside them, are at
+**[4idesk.com/#tutorial](https://4idesk.com/#tutorial)**.
+
 1. **Power the cameras and open the app.** It sweeps the subnet by MAC prefix
    and adopts anything answering on 9989, announced or not.
 2. **Run the rig check.** Each camera reads *not on the network*, *still
-   booting*, *ready — press Start*, or a count of lenses arriving. A unit
-   someone is working on gets **FIX** and is left alone.
+   booting*, *ready — press Start*, or a count of lenses arriving.
 3. **Number them once.** **INSTALL** binds a serial to a position, and the
    number follows the hardware from then on.
 4. **Press Start All.** About twenty seconds to all four lenses. A `START`
@@ -144,7 +205,7 @@ orahctl fleet              # rebuild the fleet sheet from the records
 
 A working beta. **Thirteen cameras proven end to end at four lenses each** —
 the fleet survey, every fault and what fixed it are in
-[`camera-records/`](camera-records/).
+[`camera-records/FLEET.md`](camera-records/FLEET.md).
 
 Not yet proven: the output consumed by Vahana, and the nodes on real hardware.
 Both are architecture rather than guesswork, but neither has been run for real,
@@ -161,8 +222,11 @@ and this file will say so until it has.
 | [`docs/CALIBRATION.md`](docs/CALIBRATION.md) | the `.ptv` rig presets and what they mean |
 | [`docs/FIRMWARE.md`](docs/FIRMWARE.md) | why a camera cannot be flashed from here |
 | [`camera-records/FLEET.md`](camera-records/FLEET.md) | every unit, what it reported, what it did |
-| [`docs/ux/`](docs/ux/) | the designs — open them in a browser, they are interactive |
-| [`site/`](site/) | the website, as plain static HTML you can copy anywhere |
+| [`camera-records/DEAD.md`](camera-records/DEAD.md) | the units that never reached the network |
+| [`docs/ux/`](docs/ux/) | the designs: [desk](docs/ux/switcher.html) · [multiview](docs/ux/multiview.html) · [colour](docs/ux/colour.html) · [rig check](docs/ux/rig-check.html) |
+| [`site/`](site/) | the website itself, plain static HTML you can copy anywhere |
+| [`tools/build-site.sh`](tools/build-site.sh) | rebuilds `site/` from `docs/` |
+| [`tools/deploy-site.sh`](tools/deploy-site.sh) | uploads it over FTPS — dry run by default |
 
 Every rule this application follows is in `MEASUREMENTS.md`, with the camera
 behaviour that forced it:
@@ -190,5 +254,11 @@ write it.
 
 ---
 
+<div align="center">
+
+**[4idesk.com](https://4idesk.com)**
+
 The original Camorah project this repository grew out of is preserved as
 [`CAMORAH_ORIGINAL.md`](CAMORAH_ORIGINAL.md).
+
+</div>

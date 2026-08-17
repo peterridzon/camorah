@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Builds 4i Studio and packages it into ../release/.
+# Builds 4idesk and packages it into ../release/.
 #
-#   ./make-release.sh              # release/4i-Studio-1.0.0.zip
+#   ./make-release.sh              # release/4idesk-1.0.0.zip
 #   ./make-release.sh 1.0.1        # a different version
 #
 # The zip is made with ditto, not zip(1), because a .app carries symlinks and
@@ -15,14 +15,14 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 VERSION="${1:-1.0.0}"
 OUT="$REPO/release"
-APP="$HERE/build/4i Studio.app"
-ZIP="$OUT/4i-Studio-$VERSION.zip"
+APP="$HERE/build/4idesk.app"
+ZIP="$OUT/4idesk-$VERSION.zip"
 
 "$HERE/build-app.sh" --version "$VERSION" >/dev/null
 [ -d "$APP" ] || { echo "no app was built"; exit 1; }
 
 mkdir -p "$OUT"
-rm -f "$OUT"/Orah-Control-*.zip "$OUT"/Orah-Live-Studio-*.zip "$OUT"/4i-Studio-*.zip
+rm -f "$OUT"/Orah-Control-*.zip "$OUT"/Orah-Live-Studio-*.zip "$OUT"/4idesk-*.zip
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 
 BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist")"
@@ -31,8 +31,8 @@ SIZE="$(du -h "$ZIP" | cut -f1)"
 
 # The checksum file is what someone downloading the zip actually needs, so it is
 # written next to it rather than only printed here.
-cat > "$OUT/4i-Studio-$VERSION.zip.sha256" <<EOF
-$SHA  4i-Studio-$VERSION.zip
+cat > "$OUT/4idesk-$VERSION.zip.sha256" <<EOF
+$SHA  4idesk-$VERSION.zip
 EOF
 
 echo "  $ZIP"

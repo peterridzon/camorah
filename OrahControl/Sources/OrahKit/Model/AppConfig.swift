@@ -1,6 +1,6 @@
 import Foundation
 
-/// Persisted settings, stored in `~/Library/Application Support/4i Studio/config.json`.
+/// Persisted settings, stored in `~/Library/Application Support/4idesk/config.json`.
 public struct AppConfig: Codable, Sendable, Equatable {
 
     // MARK: - MediaMTX (RTMP ingest on this Mac)
