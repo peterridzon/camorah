@@ -98,14 +98,24 @@ final class AppModel {
     /// control session opened while someone unplugs it is one the camera keeps.
     private(set) var fixingSince: [Int: Date] = [:]
 
-    var showsRigCheck = false
+    /// Which of the three screens is up.
+    ///
+    /// Three modes rather than a flag, because there are now three: cutting a
+    /// show, checking a rig, and shading cameras. A second boolean would have
+    /// made "both true" representable, and it never is.
+    enum Screen: String, Sendable { case desk, rigCheck, colour }
+    var screen: Screen = .desk
+
+    var showsRigCheck: Bool { screen == .rigCheck }
 
     /// Logged so a click that does nothing can be told from a view that does not
     /// redraw — the two look identical from the outside.
-    func setRigCheck(_ on: Bool) {
-        showsRigCheck = on
-        Log.info("ui", "switched to \(on ? "rig check" : "desk")")
+    func setScreen(_ screen: Screen) {
+        self.screen = screen
+        Log.info("ui", "switched to \(screen.rawValue)")
     }
+
+    func setRigCheck(_ on: Bool) { setScreen(on ? .rigCheck : .desk) }
 
     func toggleFixing(_ number: Int) {
         if fixingSince[number] == nil {
@@ -412,6 +422,7 @@ final class AppModel {
             }
             switcher.start()
             self.switcher = switcher
+            restoreGrades()
         } catch {
             lastError = "Switcher: \(error)"
             Log.error("app", "switcher: \(error)")
@@ -1284,6 +1295,43 @@ final class AppModel {
                 do { try await session.connect() }
                 catch { Log.warn("cam", "cam\(camera.slot) would not take a session: \(error)") }
             }
+        }
+    }
+
+    // MARK: - Colour
+
+    /// The grade for a camera, by slot. Neutral when it has never been touched.
+    func grade(slot: Int) -> ColourGrade {
+        guard let serial = camera(slot: slot)?.serial else { return ColourGrade() }
+        return configuration.colourGrades[serial] ?? ColourGrade()
+    }
+
+    /// Applies a grade and remembers it.
+    ///
+    /// Straight through to the switcher, which picks it up on the next frame —
+    /// so a camera can be shaded while it is on air, which is exactly when
+    /// somebody notices it needs shading.
+    func setGrade(_ grade: ColourGrade, slot: Int) {
+        guard let serial = camera(slot: slot)?.serial else { return }
+        _ = ConfigStore.shared.mutate { config in
+            if grade.isNeutral { config.colourGrades[serial] = nil }
+            else { config.colourGrades[serial] = grade }
+        }
+        configuration = ConfigStore.shared.config
+        switcher?.setGrade(grade, slot: slot)
+    }
+
+    /// Cameras carrying a correction — the desk shows a dot on their keys.
+    var gradedSlots: Set<Int> {
+        Set(cameras.filter { !(configuration.colourGrades[$0.serial] ?? ColourGrade()).isNeutral }
+                   .map(\.slot))
+    }
+
+    /// Puts every remembered grade back after the switcher is rebuilt.
+    private func restoreGrades() {
+        for camera in cameras {
+            let grade = configuration.colourGrades[camera.serial] ?? ColourGrade()
+            if !grade.isNeutral { switcher?.setGrade(grade, slot: camera.slot) }
         }
     }
 

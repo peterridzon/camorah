@@ -32,6 +32,27 @@ enum Theme {
     static let faint   = Color(hex: 0x5E5C57)
     static let dead    = Color(hex: 0x333331)
 
+    // MARK: - Shading panel
+    //
+    // The amber of the rig check, reused on purpose: it already means "this is
+    // ready and under your hand", and a control that is dragged rather than
+    // pressed should be the one thing the eye finds first.
+    static let amber     = orange
+    static let amberGlow = Color(hex: 0xFFC766)
+    static let keyBody   = Color(hex: 0x26221A)
+
+    static let amberGradient = LinearGradient(
+        colors: [Color(hex: 0xFFE0A6), amberGlow, Color(hex: 0xC9832A), amber],
+        startPoint: .top, endPoint: .bottom)
+
+    /// The ring on a colour wheel. Starts and ends on the same red so the wheel
+    /// closes without a seam.
+    static let wheelColours: [Color] = [
+        Color(hex: 0xE05A5A), Color(hex: 0xE0A35A), Color(hex: 0xD8E05A),
+        Color(hex: 0x7AE05A), Color(hex: 0x5AE0A3), Color(hex: 0x5AD8E0),
+        Color(hex: 0x5A7AE0), Color(hex: 0xA35AE0), Color(hex: 0xE05AD8),
+        Color(hex: 0xE05A5A)]
+
     static func label(_ size: CGFloat = 10) -> Font {
         .system(size: size, weight: .semibold, design: .default)
     }

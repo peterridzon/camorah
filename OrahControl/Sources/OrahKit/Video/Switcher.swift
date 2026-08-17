@@ -1,5 +1,6 @@
 import Foundation
 import CoreMedia
+import Metal
 import CoreVideo
 
 /// The switcher: four lanes that always move together.
@@ -49,6 +50,14 @@ public final class Switcher: @unchecked Sendable {
     /// single shared instance driven by four concurrent lanes trapped in the
     /// Swift runtime. Separate instances also avoid contending for the pool.
     private let compositors: [MetalCompositor]
+    /// One grader per lane, for the same reason there is one compositor per
+    /// lane: the four lanes run concurrently and a shared texture cache would
+    /// have them queueing behind each other.
+    private let graders: [MetalGrader]
+
+    /// What each camera's picture is doing before it reaches the mix. Absent
+    /// means neutral, which is the case that costs nothing.
+    private var grades: [Int: ColourGrade] = [:]
     private var encoders: [H264Encoder?] = Array(repeating: nil, count: 4)
     private var outputs: [FFmpegOutput?] = Array(repeating: nil, count: 4)
 
@@ -101,6 +110,10 @@ public final class Switcher: @unchecked Sendable {
         self.fps = fps
         self.bitrate = bitrate
         self.compositors = try (0..<4).map { _ in try MetalCompositor() }
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            throw MetalCompositor.CompositorError.noDevice
+        }
+        self.graders = try (0..<4).map { _ in try MetalGrader(device: device) }
     }
 
     // MARK: - Sources
@@ -113,8 +126,21 @@ public final class Switcher: @unchecked Sendable {
         }
     }
 
+    /// Sets what a camera's picture does on its way to the mix.
+    ///
+    /// Takes effect on the next frame. Nothing is re-rendered and nothing is
+    /// interrupted, which is what lets an operator shade a camera while it is
+    /// on air.
+    public func setGrade(_ grade: ColourGrade, slot: Int) {
+        lock.withLock { grades[slot] = grade.isNeutral ? nil : grade }
+    }
+
+    public func grade(slot: Int) -> ColourGrade {
+        lock.withLock { grades[slot] } ?? ColourGrade()
+    }
+
     public func removeSource(slot: Int) {
-        lock.withLock { buffers[slot] = nil }
+        lock.withLock { buffers[slot] = nil; grades[slot] = nil }
     }
 
     /// Feeds one decoded frame in. Called from the decoder for `slot`/`lens`.
@@ -307,9 +333,27 @@ public final class Switcher: @unchecked Sendable {
 
             do {
                 let t1 = clock.now
+                // Grading belongs to the camera, so it happens to each source
+                // before they meet. Doing it after the dissolve would smear one
+                // camera's correction across the other for the length of every
+                // transition.
+                let programGrade = lock.withLock { grades[program] }
+                let previewGrade = preview.flatMap { slot in lock.withLock { grades[slot] } }
+
+                let graded = programGrade.map { g in
+                    (try? graders[lens].grade(programFrame.pixelBuffer, with: g))
+                        ?? programFrame.pixelBuffer
+                } ?? programFrame.pixelBuffer
+
+                let gradedPreview: CVPixelBuffer? = previewFrame.map { frame in
+                    previewGrade.map { g in
+                        (try? graders[lens].grade(frame.pixelBuffer, with: g)) ?? frame.pixelBuffer
+                    } ?? frame.pixelBuffer
+                }
+
                 let composed = try compositors[lens].composite(
-                    from: programFrame.pixelBuffer,
-                    to: mixNow > 0.0001 ? previewFrame?.pixelBuffer : nil,
+                    from: graded,
+                    to: mixNow > 0.0001 ? gradedPreview : nil,
                     mix: mixNow)
                 if lens == monitorLens { monitorPicture?.set(composed) }
                 outputPictures?[lens].set(composed)

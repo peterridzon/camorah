@@ -14,9 +14,12 @@ struct ContentView: View {
             StatusStrip()
             Divider().overlay(Theme.line)
 
-            if model.showsRigCheck {
+            switch model.screen {
+            case .rigCheck:
                 RigCheckView()
-            } else {
+            case .colour:
+                ColourView()
+            case .desk:
                 HStack(spacing: 0) {
                     VStack(spacing: 14) {
                         DeskView()
@@ -29,10 +32,10 @@ struct ContentView: View {
                     Divider().overlay(Theme.line)
                     ControlRail().frame(width: 250)
                 }
-
-                Divider().overlay(Theme.line)
-                SignalChain()
             }
+
+            Divider().overlay(Theme.line)
+            SignalChain()
         }
         .background(Theme.bg)
         .foregroundStyle(Theme.fg)
@@ -322,8 +325,9 @@ private struct ModeSwitch: View {
         @Bindable var model = model
 
         HStack(spacing: 0) {
-            option("DESK", selected: !model.showsRigCheck) { model.setRigCheck(false) }
-            option("RIG CHECK", selected: model.showsRigCheck) { model.setRigCheck(true) }
+            option("DESK", selected: model.screen == .desk) { model.setScreen(.desk) }
+            option("COLOUR", selected: model.screen == .colour) { model.setScreen(.colour) }
+            option("RIG CHECK", selected: model.screen == .rigCheck) { model.setScreen(.rigCheck) }
         }
         .overlay { RoundedRectangle(cornerRadius: 4).stroke(Theme.line, lineWidth: 1) }
         .clipShape(RoundedRectangle(cornerRadius: 4))
@@ -448,6 +452,21 @@ private struct CameraTile: View {
                                   step: model.startingStep(slot: camera.slot),
                                   compact: true)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+
+                // A camera carrying a correction has to admit it here. Otherwise
+                // one camera going out differently shaded from the rest is
+                // invisible until somebody notices it on air.
+                if model.gradedSlots.contains(camera.slot) {
+                    Text("CC")
+                        .font(Theme.label(7.5)).tracking(0.8)
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 4).padding(.vertical, 1.5)
+                        .background(Theme.amber)
+                        .clipShape(RoundedRectangle(cornerRadius: 2))
+                        .padding(5)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity,
+                               alignment: .bottomLeading)
                 }
 
                 if isProgram || isPreview {

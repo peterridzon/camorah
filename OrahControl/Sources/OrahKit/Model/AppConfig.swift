@@ -86,6 +86,14 @@ public struct AppConfig: Codable, Sendable, Equatable {
     /// Friendly labels per slot, e.g. 1 → "Stage left".
     public var cameraLabels: [String: String] = [:]
 
+    /// Colour correction, keyed by camera **serial** rather than by slot.
+    ///
+    /// A grade describes a physical camera — its sensor, its age, how it
+    /// happens to expose — so it has to follow the unit when the rig is
+    /// renumbered. Keying it by slot would silently hand one camera's
+    /// correction to another the first time somebody reorders the desk.
+    public var colourGrades: [String: ColourGrade] = [:]
+
     // MARK: - MIDI
 
     /// MIDI note number → camera slot. Replaces the old assumption note == slot.
