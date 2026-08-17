@@ -10,7 +10,7 @@ Resolution is not baked in — the desk scales with the cameras you put in front
 of it, to 8K and beyond.
 
 **[4idesk.com](https://4idesk.com)** ·
-[Download](https://github.com/peterridzon/camorah/releases) ·
+[Download the beta](https://github.com/peterridzon/camorah/releases/download/v1.0.0-beta/4idesk-1.0.0-beta.zip) ·
 [Documentation](#documentation)
 
 | 4K | 16K | 24 | 0 |
@@ -23,7 +23,15 @@ of it, to 8K and beyond.
 > screenshot** — click the buses, drag the T-bar, switch layouts. The same
 > files are in [`docs/ux/`](docs/ux/); open any of them in a browser.
 
-![The website](docs/ui/hero.png)
+![How a show gets out](docs/ui/signalflow.png)
+
+<div align="center"><sub>
+
+Twenty-four cameras in, one 4K sphere out. The version on
+**[4idesk.com](https://4idesk.com/signalflow.html)** is clickable — tap any
+device for what it does and why it sits where it does.
+
+</sub></div>
 
 ---
 
@@ -46,8 +54,6 @@ and it is the stitcher that decides how big it comes out.
 ## The whole show, from the truss to the audience
 
 [▶ Live and clickable](https://4idesk.com/signalflow.html) · [source](docs/web/signalflow.html)
-
-![Signal flow](docs/ui/signalflow.png)
 
 The two paths that leave a node never meet again: one carries the show, the
 other carries the recording, and nothing on the desk can reach the second one.
@@ -210,6 +216,21 @@ the fleet survey, every fault and what fixed it are in
 Not yet proven: the output consumed by Vahana, and the nodes on real hardware.
 Both are architecture rather than guesswork, but neither has been run for real,
 and this file will say so until it has.
+
+---
+
+## The website
+
+[▶ 4idesk.com](https://4idesk.com) · [source](docs/web/) ·
+[static build](site/) · [build script](tools/build-site.sh)
+
+Plain static HTML with no build step and no external requests, so the same
+folder opens from disk, uploads over FTP, or serves from Pages — and all three
+are the thing that was actually reviewed. Every design on it is embedded live
+rather than screenshotted, which means the page cannot drift away from the
+application without it being visible.
+
+![The website](docs/ui/hero.png)
 
 ---
 
