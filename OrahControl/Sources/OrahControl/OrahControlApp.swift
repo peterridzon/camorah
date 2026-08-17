@@ -59,6 +59,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct OrahControlApp: App {
     static let outputMonitorWindow = "output-monitor"
+    static let multiviewWindow = "multiview"
+    static let consoleWindow = "console"
 
     @Environment(\.openWindow) private var openWindow
 
@@ -84,6 +86,11 @@ struct OrahControlApp: App {
                     .keyboardShortcut("m", modifiers: [.command, .shift])
                 Button("Rig Check") { model.setRigCheck(!model.showsRigCheck) }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
+                Divider()
+                Button("Multiview") { openWindow(id: Self.multiviewWindow) }
+                    .keyboardShortcut("1", modifiers: [.command, .shift])
+                Button("Console") { openWindow(id: Self.consoleWindow) }
+                    .keyboardShortcut("2", modifiers: [.command, .shift])
             }
         }
 
@@ -95,9 +102,48 @@ struct OrahControlApp: App {
                 .environment(model)
         }
         .defaultSize(width: 1280, height: 900)
+
+        // Multiview and console as windows of their own.
+        //
+        // A gallery is more than one screen: the wall goes on the display the
+        // operator looks up at, the desk stays under their hands, and neither
+        // should have to share a window with the other. Both keep working in
+        // the main window as well — this is another way to see them, not a
+        // different mode.
+        Window("Multiview", id: Self.multiviewWindow) {
+            DetachedPane { MultiviewPane(showsUndock: false) }
+                .environment(model)
+        }
+        .defaultSize(width: 1500, height: 950)
+
+        Window("Console", id: Self.consoleWindow) {
+            DetachedPane { ConsoleView(showsUndock: false) }
+                .environment(model)
+        }
+        .defaultSize(width: 1280, height: 640)
     }
 
     private func openOutputMonitor() {
         openWindow(id: Self.outputMonitorWindow)
+    }
+}
+
+/// A pane on its own, with the room around it a window needs.
+///
+/// The panes are built to sit in a stack inside the main window, so on their
+/// own they want padding and a ground of their own — otherwise they float
+/// against the window chrome and read as something that came loose rather than
+/// as a window in its own right.
+@MainActor
+struct DetachedPane<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ScrollView {
+            content().padding(12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.bg)
+        .foregroundStyle(Theme.fg)
     }
 }

@@ -14,14 +14,30 @@ import OrahKit
 @MainActor
 struct MultiviewPane: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
 
-    private let sourceColumns = Array(repeating: GridItem(.flexible(), spacing: 5), count: 12)
+    /// Hidden when the pane is already the window, so the button never offers
+    /// to open a second copy of what you are looking at.
+    var showsUndock = true
+
+    /// Only cameras that are actually here get a tile, and the tiles grow to
+    /// fill what is left. Twenty-four empty rectangles when three cameras are
+    /// plugged in is twenty-one holes taking space from the three that matter —
+    /// and the desk keys already hold the positions, which is where finger
+    /// memory belongs.
+    private let sourceColumns = [GridItem(.adaptive(minimum: 132, maximum: 260), spacing: 6)]
 
     var body: some View {
         VStack(spacing: 0) {
             PaneBar(title: "MULTIVIEW",
-                    subtitle: "2 boxes + 2 quads + \(model.cameras.count) sources") {
-                EmptyView()
+                    subtitle: "\(model.cameras.count) sources") {
+                if showsUndock {
+                    Button("⇱ Own window") {
+                        openWindow(id: OrahControlApp.multiviewWindow)
+                    }
+                    .buttonStyle(.plain)
+                    .font(Theme.value(11)).foregroundStyle(Theme.dim)
+                }
             }
 
             VStack(spacing: 7) {
@@ -90,6 +106,15 @@ struct MultiviewPane: View {
                 ForEach(0..<4, id: \.self) { quadrant in
                     ZStack(alignment: .bottomLeading) {
                         Rectangle().fill(quadrant < cameras.count ? Theme.raised : Color(hex: 0x101012))
+                        if quadrant < cameras.count, !cameras[quadrant].isStreaming {
+                            Text(model.state(slot: cameras[quadrant].slot).label.uppercased())
+                                .font(Theme.label(7)).tracking(0.8)
+                                .foregroundStyle(Theme.faint)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2).minimumScaleFactor(0.7)
+                                .padding(.horizontal, 4)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
                         if quadrant < cameras.count {
                             Text(cameras[quadrant].name.uppercased())
                                 .font(.system(size: 8.5, weight: .semibold))
@@ -134,9 +159,19 @@ struct MultiviewPane: View {
     // MARK: - Sources
 
     private var sources: some View {
-        LazyVGrid(columns: sourceColumns, spacing: 5) {
-            ForEach(0..<AppModel.keysPerBus, id: \.self) { index in
-                SourceTile(camera: index < model.buttons.count ? model.buttons[index] : nil)
+        // In button order, so the wall reads left to right the same way the
+        // desk does, but with the gaps closed up.
+        let present = model.buttons.compactMap { $0 }
+
+        return Group {
+            if present.isEmpty {
+                Text("NO CAMERAS ON THE NETWORK")
+                    .font(Theme.label(10)).tracking(2).foregroundStyle(Theme.faint)
+                    .frame(maxWidth: .infinity).padding(.vertical, 28)
+            } else {
+                LazyVGrid(columns: sourceColumns, spacing: 6) {
+                    ForEach(present) { camera in SourceTile(camera: camera) }
+                }
             }
         }
     }
@@ -146,26 +181,54 @@ struct MultiviewPane: View {
 @MainActor
 private struct SourceTile: View {
     @Environment(AppModel.self) private var model
-    let camera: AppModel.Camera?
+    let camera: AppModel.Camera
 
-    private var isProgram: Bool { camera?.slot == model.programSlot }
-    private var isPreview: Bool { camera?.slot == model.previewSlot }
+    private var isProgram: Bool { camera.slot == model.programSlot }
+    private var isPreview: Bool { camera.slot == model.previewSlot }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            Rectangle().fill(camera == nil ? Color(hex: 0x101012) : Theme.raised)
+            Rectangle().fill(Theme.raised)
 
-            if let camera {
+            // Only programme and preview are decoded — that is the rule that
+            // makes twenty-four cameras possible on one Mac — so those two
+            // tiles carry a live picture and the rest carry their status.
+            if isProgram {
+                VideoView(sink: model.programSink, lens: model.lens(for: camera.slot))
+            } else if isPreview {
+                VideoView(sink: model.previewSink, lens: model.lens(for: camera.slot))
+            }
+
+            Group {
+                // What the camera is doing, while it is not yet a picture.
+                // "Not on the network", "still booting", "ready — press Start",
+                // and how many of the four lenses have arrived. Losing this in
+                // the rewrite made a tile that is empty for a good reason look
+                // exactly like one that is empty for a bad one.
+                if !camera.isStreaming || camera.lensesArriving < 4 {
+                    StartupStatus(phase: model.state(slot: camera.slot),
+                                  startedAt: model.startingSince(slot: camera.slot),
+                                  lensesArriving: camera.lensesArriving,
+                                  step: model.startingStep(slot: camera.slot),
+                                  compact: true)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.top, 14)
+                }
+
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
-                    Text(model.legend(for: camera))
-                        .font(.system(size: 8.5, weight: .semibold))
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                        .foregroundStyle(Theme.amberGlow)
-                        .padding(.horizontal, 4).padding(.vertical, 1.5)
-                        .background(Color.black.opacity(0.75))
-                        .clipShape(RoundedRectangle(cornerRadius: 2))
-                        .padding(3)
+                    HStack(spacing: 3) {
+                        Text(model.legend(for: camera))
+                            .font(.system(size: 8.5, weight: .semibold))
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                            .foregroundStyle(Theme.amberGlow)
+                            .padding(.horizontal, 4).padding(.vertical, 1.5)
+                            .background(Color.black.opacity(0.75))
+                            .clipShape(RoundedRectangle(cornerRadius: 2))
+                        Spacer(minLength: 0)
+                        startKey(camera)
+                    }
+                    .padding(3)
                 }
 
                 Text(isProgram ? "PGM" : isPreview ? "PVW"
@@ -180,11 +243,12 @@ private struct SourceTile: View {
                     .clipShape(RoundedRectangle(cornerRadius: 2))
                     .padding(3)
 
-                // Amber keys, on the source because that is where the eye is
-                // when choosing. Pressing one twice takes it back out.
+                // Which of the camera's four lenses this tile shows. All four
+                // are always available — a camera is four sensors and any of
+                // them can be the one worth watching.
                 HStack(spacing: 2) {
-                    ForEach(0..<4, id: \.self) { box in
-                        sendKey(box: box, camera: camera)
+                    ForEach(0..<4, id: \.self) { lens in
+                        lensKey(lens, camera: camera)
                     }
                 }
                 .padding(3)
@@ -196,39 +260,69 @@ private struct SourceTile: View {
         .overlay {
             RoundedRectangle(cornerRadius: 4)
                 .stroke(isProgram ? Theme.program : isPreview ? Theme.preview
-                        : camera == nil ? Theme.dead : Color(hex: 0x1E1E22),
-                        lineWidth: 2)
+                        : Color(hex: 0x1E1E22), lineWidth: 2)
         }
-        .onTapGesture { if let camera { model.previewSlot = camera.slot } }
+        .onTapGesture { model.selectPreview(camera.slot) }
     }
 
-    /// Keys 1 and 2 are preview and program, which the desk owns — they are
-    /// shown dark rather than hidden so the four keys always mean the same four
-    /// boxes wherever you look.
-    private func sendKey(box: Int, camera: AppModel.Camera) -> some View {
-        let isFree = box >= 2
-        let freeIndex = box - 2
-        let on = isFree && model.boxContains(freeIndex, serial: camera.serial)
-
+    /// Start or stop this camera on its own.
+    ///
+    /// Start All is for the top of a show; this is for the camera that came up
+    /// late, or the one somebody had to power cycle halfway through. It says
+    /// what pressing it will do rather than what the camera is currently doing,
+    /// because a button is an instruction, not a status light — the status is
+    /// already written across the tile above it.
+    private func startKey(_ camera: AppModel.Camera) -> some View {
+        let running = model.isRunning(slot: camera.slot)
         return Button {
-            guard isFree else { return }
-            model.sendToBox(freeIndex, serial: camera.serial)
+            if running { model.stopCamera(camera.slot) }
+            else { model.startCamera(camera.slot) }
         } label: {
-            Text("\(box + 1)")
-                .font(.system(size: 7.5, weight: .bold, design: .monospaced))
-                .frame(width: 13, height: 13)
-                .foregroundStyle(on ? Color(hex: 0x141417)
-                                 : isFree ? Color(hex: 0xB98B45) : Theme.dead)
+            Text(running ? "STOP" : "START")
+                .font(.system(size: 7, weight: .bold, design: .monospaced))
+                .tracking(0.6)
+                .padding(.horizontal, 4).padding(.vertical, 2)
+                .foregroundStyle(running ? Theme.program : Color(hex: 0x141417))
                 .background(RoundedRectangle(cornerRadius: 3)
-                    .fill(on ? AnyShapeStyle(Theme.amberGradient)
-                          : AnyShapeStyle(Color.black.opacity(0.86))))
+                    .fill(running ? AnyShapeStyle(Color.black.opacity(0.8))
+                                  : AnyShapeStyle(Theme.amberGradient)))
                 .overlay {
                     RoundedRectangle(cornerRadius: 3)
-                        .stroke(on ? Theme.amberGlow
-                                : isFree ? Color(hex: 0x6B4D18) : Theme.dead, lineWidth: 1)
+                        .stroke(running ? Theme.program.opacity(0.8) : Theme.amberGlow,
+                                lineWidth: 1)
                 }
         }
         .buttonStyle(.plain)
-        .disabled(!isFree)
+        .help(running ? "Stop cam \(camera.slot)" : "Start cam \(camera.slot)")
+    }
+
+    /// One of the four lenses. Lit is the one being shown; a lens that has not
+    /// arrived yet is dimmed rather than hidden, so the row always reads as the
+    /// same four positions and a missing half of a camera is visible as a gap
+    /// rather than as a shorter row.
+    private func lensKey(_ lens: Int, camera: AppModel.Camera) -> some View {
+        let shown = model.lens(for: camera.slot) == lens
+        let arrived = lens < camera.lensesArriving
+
+        return Button {
+            model.setLens(lens, for: camera.slot)
+        } label: {
+            Text("\(lens + 1)")
+                .font(.system(size: 7.5, weight: .bold, design: .monospaced))
+                .frame(width: 14, height: 14)
+                .foregroundStyle(shown ? Color(hex: 0x141417)
+                                 : arrived ? Theme.amberGlow : Color(hex: 0x6B4D18))
+                .background(RoundedRectangle(cornerRadius: 3)
+                    .fill(shown ? AnyShapeStyle(Theme.amberGradient)
+                          : AnyShapeStyle(Color.black.opacity(0.86))))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(shown ? Theme.amberGlow
+                                : arrived ? Theme.amber.opacity(0.75) : Color(hex: 0x4A3811),
+                                lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+        .help("Lens \(Switcher.lenses[lens])")
     }
 }

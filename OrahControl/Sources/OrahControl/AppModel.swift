@@ -975,6 +975,13 @@ final class AppModel {
 
     // MARK: - Switching
 
+    /// The only way preview should ever change from the interface.
+    ///
+    /// Assigning `previewSlot` directly updates what the desk *draws* and
+    /// nothing else — the switcher never hears about it, so the monitor keeps
+    /// showing the old camera while the tile insists a new one is selected.
+    /// That is exactly the "two sources for one state" the desk is built to
+    /// avoid, so the setter does both or neither.
     func selectPreview(_ slot: Int) {
         guard slot != programSlot else { return }
         previewSlot = slot
@@ -1378,6 +1385,22 @@ final class AppModel {
     func legend(for camera: Camera) -> String {
         keyLegendIsName ? camera.name.uppercased()
                         : String(format: "CAM %02d", camera.slot)
+    }
+
+    // MARK: - Which lens a source tile shows
+
+    /// A camera is four lenses, and which one a tile shows is a per-camera
+    /// choice: the front of one unit and the crowd side of another are what you
+    /// want side by side, not the same numbered lens on every tile.
+    private(set) var tileLens: [Int: Int] = [:]
+
+    func lens(for slot: Int) -> Int { tileLens[slot] ?? 0 }
+
+    func setLens(_ lens: Int, for slot: Int) {
+        tileLens[slot] = max(0, min(3, lens))
+        // Program and preview are the two the switcher actually decodes, so
+        // changing their lens is the one case that has to reach it.
+        if slot == programSlot || slot == previewSlot { syncDesk() }
     }
 
     // MARK: - Multiview boxes

@@ -11,19 +11,30 @@ import OrahKit
 @MainActor
 struct ConsoleView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
     @State private var showsAssign = false
+
+    var showsUndock = true
 
     var body: some View {
         VStack(spacing: 0) {
             PaneBar(title: "CONSOLE", subtitle: "program · preview · transition") {
                 Button("⚙ Assign") { showsAssign = true }.buttonStyle(.plain)
                     .font(Theme.value(11)).foregroundStyle(Theme.dim)
+                if showsUndock {
+                    Button("⇱ Own window") {
+                        openWindow(id: OrahControlApp.consoleWindow)
+                    }
+                    .buttonStyle(.plain)
+                    .font(Theme.value(11)).foregroundStyle(Theme.dim)
+                }
             }
 
             HStack(alignment: .top, spacing: 13) {
                 buses
                 TransitionBlock()
                 TBarColumn()
+                Spacer(minLength: 0)
             }
             .padding(11)
         }
@@ -39,7 +50,7 @@ struct ConsoleView: View {
             bus(.preview)
         }
         .padding(11)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
         .background(RoundedRectangle(cornerRadius: 9).fill(Theme.bg))
         .overlay { RoundedRectangle(cornerRadius: 9).stroke(Theme.line, lineWidth: 1) }
     }
@@ -58,11 +69,19 @@ struct ConsoleView: View {
                     .font(Theme.label(9)).tracking(1.4).foregroundStyle(Theme.faint)
             }
 
+            // Fixed width, packed left, black to the right of them.
+            //
+            // A grid shares its width out among the columns, so widening the
+            // window pushed every key away from the label it belongs to. A desk
+            // does not do that: the keys are where they were the last time you
+            // looked, and the surface simply gets wider.
             ForEach([0, 12], id: \.self) { start in
                 HStack(spacing: 5) {
                     ForEach(start..<(start + 12), id: \.self) { index in
                         KeyCap(index: index, isProgramBus: isProgram)
+                            .frame(width: 58, height: 58)
                     }
+                    Spacer(minLength: 0)
                 }
             }
         }
@@ -96,7 +115,7 @@ private struct KeyCap: View {
     var body: some View {
         Button {
             guard let slot = camera?.slot else { return }
-            if isProgramBus { model.takeToAir(slot) } else { model.previewSlot = slot }
+            if isProgramBus { model.takeToAir(slot) } else { model.selectPreview(slot) }
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 9)
@@ -123,10 +142,10 @@ private struct KeyCap: View {
 
                 if let camera {
                     Text(model.legend(for: camera))
-                        .font(.system(size: 11.5, weight: .bold))
-                        .tracking(0.9)
+                        .font(.system(size: 10.5, weight: .bold))
+                        .tracking(0.6)
                         .multilineTextAlignment(.center)
-                        .minimumScaleFactor(0.65)
+                        .minimumScaleFactor(0.55)
                         .lineLimit(2)
                         .foregroundStyle(isLit ? (isProgramBus ? .white : Color(hex: 0x04240F))
                                               : Theme.amberGlow)
