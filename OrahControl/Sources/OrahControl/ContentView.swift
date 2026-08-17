@@ -338,25 +338,19 @@ private struct ModeSwitch: View {
     var body: some View {
         @Bindable var model = model
 
-        HStack(spacing: 0) {
-            option("DESK", selected: model.screen == .desk) { model.setScreen(.desk) }
-            option("COLOUR", selected: model.screen == .colour) { model.setScreen(.colour) }
-            option("RIG CHECK", selected: model.screen == .rigCheck) { model.setScreen(.rigCheck) }
+        Strip {
+            StripButton(title: "DESK", selected: model.screen == .desk) {
+                model.setScreen(.desk)
+            }
+            StripButton(title: "COLOUR", selected: model.screen == .colour) {
+                model.setScreen(.colour)
+            }
+            StripButton(title: "RIG CHECK", selected: model.screen == .rigCheck) {
+                model.setScreen(.rigCheck)
+            }
         }
-        .overlay { RoundedRectangle(cornerRadius: 4).stroke(Theme.line, lineWidth: 1) }
-        .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 
-    private func option(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(Theme.label(9)).tracking(1.2)
-                .foregroundStyle(selected ? Theme.bg : Theme.dim)
-                .padding(.horizontal, 10).padding(.vertical, 4)
-                .background { if selected { Theme.orange } }
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 /// Opens the window showing the four lanes that leave for the stitcher.

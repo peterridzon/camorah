@@ -573,58 +573,21 @@ struct MultiviewTabs: View {
     // MARK: - Tabs
 
     var body: some View {
-        HStack(spacing: 8) {
+        Strip {
             ForEach(1...AppModel.multiviewCount, id: \.self) { number in
-                generatorTab(number)
+                StripButton(title: "MULTIVIEW \(number)",
+                            detail: "\(model.output(for: number)) · \(model.layout(for: number).title)",
+                            selected: isLive(number)) {
+                    openWindow(id: OrahControlApp.multiviewWindow, value: number)
+                }
             }
-            Spacer()
         }
     }
 
-    private func generatorTab(_ number: Int) -> some View {
-        // A generator that is live — on its own screen, or the one embedded in
-        // this window — wears the amber frame. The frame already means "this
-        // one is running" everywhere else on the desk, so a badge saying OPEN
-        // was the same sentence written twice.
-        let selected = model.detachedMultiviews.contains(number)
+    /// Live means on a screen somewhere — in a window of its own, or the one
+    /// embedded in this window. Amber says the same thing in both strips.
+    private func isLive(_ number: Int) -> Bool {
+        model.detachedMultiviews.contains(number)
             || (number == 1 && model.showsInlineMultiview)
-        return HStack(spacing: 9) {
-            Circle()
-                .fill(selected ? Theme.amber : Theme.dead)
-                .frame(width: 8, height: 8)
-                .shadow(color: selected ? Theme.amber : .clear, radius: 5)
-            Text("MULTIVIEW \(number)")
-                .font(.system(size: 12, weight: .bold, design: .monospaced)).tracking(1.4)
-            Text("\(model.output(for: number)) · \(model.layout(for: number).title)")
-                .font(Theme.value(11)).foregroundStyle(Theme.dim)
-
-        }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 9)
-            .fill(selected ? Color(hex: 0x1D1913) : Theme.raised))
-        .overlay { RoundedRectangle(cornerRadius: 9)
-            .stroke(selected ? Theme.amber : Theme.line, lineWidth: 1) }
-        .contentShape(Rectangle())
-        // The tab stays whether the generator is in a window or not — it is how
-        // you call it back. Tapping one that is already open brings that window
-        // forward rather than making a second copy of it.
-        .onTapGesture { openWindow(id: OrahControlApp.multiviewWindow, value: number) }
     }
-
-    private func unusedChip(_ title: String, on: Bool = false,
-                      _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(Theme.value(11.5))
-                .padding(.horizontal, 11).padding(.vertical, 6)
-                .foregroundStyle(on ? Color(hex: 0x141417) : Theme.dim)
-                .background(RoundedRectangle(cornerRadius: 7)
-                    .fill(on ? AnyShapeStyle(Theme.amberGradient)
-                             : AnyShapeStyle(Color(hex: 0x232327))))
-                .overlay { RoundedRectangle(cornerRadius: 7)
-                    .stroke(on ? Theme.amberGlow : Theme.line, lineWidth: 1) }
-        }
-        .buttonStyle(.plain)
-    }
-
 }
