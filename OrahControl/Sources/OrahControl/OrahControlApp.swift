@@ -87,10 +87,12 @@ struct OrahControlApp: App {
                 Button("Rig Check") { model.setRigCheck(!model.showsRigCheck) }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                 Divider()
-                Button("Multiview") { openWindow(id: Self.multiviewWindow) }
+                Button("Multiview 1") { openWindow(id: Self.multiviewWindow, value: 1) }
                     .keyboardShortcut("1", modifiers: [.command, .shift])
-                Button("Console") { openWindow(id: Self.consoleWindow) }
+                Button("Multiview 2") { openWindow(id: Self.multiviewWindow, value: 2) }
                     .keyboardShortcut("2", modifiers: [.command, .shift])
+                Button("Console") { openWindow(id: Self.consoleWindow) }
+                    .keyboardShortcut("3", modifiers: [.command, .shift])
             }
         }
 
@@ -110,8 +112,16 @@ struct OrahControlApp: App {
         // should have to share a window with the other. Both keep working in
         // the main window as well — this is another way to see them, not a
         // different mode.
-        Window("Multiview", id: Self.multiviewWindow) {
-            DetachedPane { MultiviewPane(showsUndock: false) }
+        // Two generators, each on its own display.
+        //
+        // A WindowGroup keyed by a number rather than a single Window: one wall
+        // is never enough on a gallery with two screens, and the second is
+        // usually laid out differently from the first — big boxes in front of
+        // the operator, the whole rig on the wall behind. Opening the same
+        // number twice brings the existing window forward instead of stacking
+        // a copy on top of it.
+        WindowGroup("Multiview", id: Self.multiviewWindow, for: Int.self) { $number in
+            DetachedPane { MultiviewPane(generator: number ?? 1, showsUndock: false) }
                 .environment(model)
         }
         .defaultSize(width: 1500, height: 950)

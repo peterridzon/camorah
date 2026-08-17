@@ -16,6 +16,11 @@ struct MultiviewPane: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
 
+    /// Which generator this is. They differ in how much they show: the first
+    /// is laid out for the operator with large boxes, the second carries the
+    /// whole rig. Same sources, two ways of watching them.
+    var generator = 1
+
     /// Hidden when the pane is already the window, so the button never offers
     /// to open a second copy of what you are looking at.
     var showsUndock = true
@@ -25,15 +30,39 @@ struct MultiviewPane: View {
     /// plugged in is twenty-one holes taking space from the three that matter —
     /// and the desk keys already hold the positions, which is where finger
     /// memory belongs.
-    private let sourceColumns = [GridItem(.adaptive(minimum: 132, maximum: 260), spacing: 6)]
+    private var layout: AppModel.MultiviewLayout { model.layout(for: generator) }
+
+    /// A wall with nothing above it can give each camera more room, so the
+    /// tiles are allowed to grow further when the boxes are switched off.
+    private var sourceColumns: [GridItem] {
+        let wide = !layout.showsBoxes
+        return [GridItem(.adaptive(minimum: wide ? 170 : 132,
+                                   maximum: wide ? 420 : 260), spacing: 6)]
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            PaneBar(title: "MULTIVIEW",
+            PaneBar(title: showsUndock ? "MULTIVIEW" : "MULTIVIEW \(generator)",
                     subtitle: "\(model.cameras.count) sources") {
+                // Each window picks its own. Same sources, laid out for where
+                // that screen actually is.
+                Picker("", selection: Binding(
+                    get: { model.layout(for: generator) },
+                    set: { model.setLayout($0, for: generator) })) {
+                    ForEach(AppModel.MultiviewLayout.allCases, id: \.self) { layout in
+                        Text(layout.title).tag(layout)
+                    }
+                }
+                .labelsHidden().controlSize(.small).frame(width: 168)
+
                 if showsUndock {
-                    Button("⇱ Own window") {
-                        openWindow(id: OrahControlApp.multiviewWindow)
+                    Button("⇱ Window 1") {
+                        openWindow(id: OrahControlApp.multiviewWindow, value: 1)
+                    }
+                    .buttonStyle(.plain)
+                    .font(Theme.value(11)).foregroundStyle(Theme.dim)
+                    Button("⇱ Window 2") {
+                        openWindow(id: OrahControlApp.multiviewWindow, value: 2)
                     }
                     .buttonStyle(.plain)
                     .font(Theme.value(11)).foregroundStyle(Theme.dim)
@@ -41,8 +70,8 @@ struct MultiviewPane: View {
             }
 
             VStack(spacing: 7) {
-                boxes
-                sources
+                if layout.showsBoxes { boxes }
+                if layout.showsSources { sources }
             }
             .padding(11)
         }
@@ -57,8 +86,10 @@ struct MultiviewPane: View {
         HStack(spacing: 6) {
             bigBox(role: .preview)
             bigBox(role: .program)
-            quadBox(0)
-            quadBox(1)
+            if layout.showsQuads {
+                quadBox(0)
+                quadBox(1)
+            }
         }
     }
 

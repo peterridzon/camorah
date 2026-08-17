@@ -300,9 +300,9 @@ private struct TBarColumn: View {
             Text("T-BAR").font(Theme.label(9.5)).tracking(2).foregroundStyle(Theme.faint)
 
             HStack(spacing: 12) {
-                Ladder(level: model.mix)
+                Ladder(level: model.ladderLevel)
                 track
-                Ladder(level: model.mix)
+                Ladder(level: model.ladderLevel)
             }
             .frame(maxHeight: .infinity)
 
@@ -366,11 +366,14 @@ private struct Ladder: View {
         VStack(spacing: 2) {
             ForEach(0..<count, id: \.self) { index in
                 // Measured from the top, because that is where the handle
-                // starts and which way it travels. Filling from the bottom made
-                // the column grow upwards while the hand pulled down — two
-                // readings of the same number, pointing opposite ways.
+                // starts and which way it travels.
+                //
+                // Counted against the number of lamps rather than against the
+                // last one's position, or the bottom lamp could never light: at
+                // full travel its own position is exactly 1, and 1 < 1 is
+                // false. The scale stopped one short of the end.
                 let position = Double(index) / Double(count - 1)
-                let lit = position < level
+                let lit = Double(index) < level * Double(count)
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(lit ? Color(hue: 0.094, saturation: 0.92,
                                       brightness: 0.42 + position * 0.5)

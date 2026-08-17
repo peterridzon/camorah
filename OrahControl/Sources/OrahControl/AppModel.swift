@@ -1004,7 +1004,9 @@ final class AppModel {
 
         let duration = transitionMilliseconds / 1000
         let started = Date()
+        autoRunning = true
         transitionTask = Task { @MainActor in
+            defer { autoRunning = false }
             while !Task.isCancelled {
                 let progress = Date().timeIntervalSince(started) / duration
                 if progress >= 1 { swap(); return }
@@ -1055,6 +1057,21 @@ final class AppModel {
     /// The end the current transition started from.
     private var tbarAnchor: Double = 0
 
+    /// True only while AUTO is running the dissolve on its own clock.
+    private(set) var autoRunning = false
+
+    /// What the ladders beside the T-bar show.
+    ///
+    /// The handle's position, not the transition's progress. A fader's scale
+    /// says where the fader is, so it empties on the way back up the same way
+    /// it filled on the way down — reading progress instead meant it filled
+    /// again while the hand was returning, and never came back at all.
+    ///
+    /// The one exception is AUTO, which runs the dissolve without touching the
+    /// handle. There is nothing else for the scale to say then, so it says how
+    /// far through the transition is.
+    var ladderLevel: Double { autoRunning ? mix : tbarPosition }
+
     /// The T-bar, or a MIDI fader.
     ///
     /// Flip-flop, as every hardware desk does it: pull it down to make the
@@ -1064,6 +1081,7 @@ final class AppModel {
     /// still on it, and it would fight you.
     func setTBar(_ value: Double) {
         transitionTask?.cancel()
+        autoRunning = false
         tbarPosition = min(max(value, 0), 1)
 
         let travelled = abs(tbarPosition - tbarAnchor)
@@ -1422,6 +1440,41 @@ final class AppModel {
     func legend(for camera: Camera) -> String {
         keyLegendIsName ? camera.name.uppercased()
                         : String(format: "CAM %02d", camera.slot)
+    }
+
+    // MARK: - Multiview layout
+
+    /// How each multiview window is laid out.
+    ///
+    /// Two windows on two displays are rarely wanted the same way round: the
+    /// one in front of the operator carries the boxes, the one on the wall
+    /// carries every camera. So the layout belongs to the window, not to the
+    /// application.
+    enum MultiviewLayout: String, CaseIterable, Sendable {
+        case boxesAndSources, sourcesOnly, boxesOnly, twoBoxes
+
+        var title: String {
+            switch self {
+            case .boxesAndSources: "4 boxes + sources"
+            case .sourcesOnly:     "wall — sources only"
+            case .boxesOnly:       "boxes only"
+            case .twoBoxes:        "preview + program"
+            }
+        }
+        var showsBoxes: Bool { self != .sourcesOnly }
+        var showsSources: Bool { self != .boxesOnly }
+        var showsQuads: Bool { self == .boxesAndSources || self == .boxesOnly }
+    }
+
+    private(set) var multiviewLayout: [Int: MultiviewLayout] = [:]
+
+    func layout(for generator: Int) -> MultiviewLayout {
+        multiviewLayout[generator] ?? (generator == 1 ? .boxesAndSources : .sourcesOnly)
+    }
+
+    func setLayout(_ layout: MultiviewLayout, for generator: Int) {
+        multiviewLayout[generator] = layout
+        Log.info("ui", "multiview \(generator) laid out as \(layout.rawValue)")
     }
 
     // MARK: - Which lens a source tile shows
