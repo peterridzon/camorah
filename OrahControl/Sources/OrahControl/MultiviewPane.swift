@@ -1,12 +1,13 @@
 import SwiftUI
 import OrahKit
 
-/// Four large boxes over every source.
+/// A multiview generator: a wall of sources, a band of large boxes, and the
+/// rail that decides how they are arranged.
 ///
-/// Preview and program are the two being judged, so they stay whole. The other
-/// two are free and are quad splits — four sources each, which is what makes a
-/// twenty-four camera rig watchable without a wall of monitors. Every source
-/// carries amber keys that send it to one of them.
+/// There are two of these and they feed two displays. They are rarely wanted
+/// the same way round — the screen in front of the operator carries the boxes,
+/// the one on the wall carries every camera — so the layout belongs to the
+/// generator rather than to the application.
 ///
 /// Tiles are 3:4 because the camera composes a 1440×1920 portrait. A tile in
 /// any other shape either letterboxes or lies about the framing, and on a
@@ -16,80 +17,103 @@ struct MultiviewPane: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
 
-    /// Which generator this is. They differ in how much they show: the first
-    /// is laid out for the operator with large boxes, the second carries the
-    /// whole rig. Same sources, two ways of watching them.
     var generator = 1
-
     /// Hidden when the pane is already the window, so the button never offers
     /// to open a second copy of what you are looking at.
     var showsUndock = true
 
-    /// Only cameras that are actually here get a tile, and the tiles grow to
-    /// fill what is left. Twenty-four empty rectangles when three cameras are
-    /// plugged in is twenty-one holes taking space from the three that matter —
-    /// and the desk keys already hold the positions, which is where finger
-    /// memory belongs.
+    @State private var showsLabels = true
+    @State private var showsMeters = false
+
     private var layout: AppModel.MultiviewLayout { model.layout(for: generator) }
 
-    /// A wall with nothing above it can give each camera more room, so the
-    /// tiles are allowed to grow further when the boxes are switched off.
-    private var sourceColumns: [GridItem] {
-        let wide = !layout.showsBoxes
-        return [GridItem(.adaptive(minimum: wide ? 170 : 132,
-                                   maximum: wide ? 420 : 260), spacing: 6)]
-    }
-
     var body: some View {
-        VStack(spacing: 0) {
-            PaneBar(title: showsUndock ? "MULTIVIEW" : "MULTIVIEW \(generator)",
-                    subtitle: "\(model.cameras.count) sources") {
-                // Each window picks its own. Same sources, laid out for where
-                // that screen actually is.
-                Picker("", selection: Binding(
-                    get: { model.layout(for: generator) },
-                    set: { model.setLayout($0, for: generator) })) {
-                    ForEach(AppModel.MultiviewLayout.allCases, id: \.self) { layout in
-                        Text(layout.title).tag(layout)
-                    }
-                }
-                .labelsHidden().controlSize(.small).frame(width: 168)
-
-                if showsUndock {
-                    Button("⇱ Window 1") {
-                        openWindow(id: OrahControlApp.multiviewWindow, value: 1)
-                    }
-                    .buttonStyle(.plain)
-                    .font(Theme.value(11)).foregroundStyle(Theme.dim)
-                    Button("⇱ Window 2") {
-                        openWindow(id: OrahControlApp.multiviewWindow, value: 2)
-                    }
-                    .buttonStyle(.plain)
-                    .font(Theme.value(11)).foregroundStyle(Theme.dim)
-                }
+        VStack(spacing: 10) {
+            tabs
+            HStack(alignment: .top, spacing: 10) {
+                screen
+                rail.frame(width: 336)
             }
-
-            VStack(spacing: 7) {
-                if layout.showsBoxes { boxes }
-                if layout.showsSources { sources }
-            }
-            .padding(11)
         }
+        .padding(11)
         .background(Theme.panel)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay { RoundedRectangle(cornerRadius: 10).stroke(Theme.line, lineWidth: 1) }
     }
 
-    // MARK: - Boxes
+    // MARK: - Tabs
 
-    private var boxes: some View {
-        HStack(spacing: 6) {
-            bigBox(role: .preview)
-            bigBox(role: .program)
-            if layout.showsQuads {
-                quadBox(0)
-                quadBox(1)
+    private var tabs: some View {
+        HStack(spacing: 8) {
+            ForEach(1...2, id: \.self) { number in
+                generatorTab(number)
             }
+            Spacer()
+            if showsUndock {
+                chip("⇱ Pop out") { openWindow(id: OrahControlApp.multiviewWindow, value: generator) }
+            }
+            chip("Aa labels", on: showsLabels) { showsLabels.toggle() }
+            chip("▮ meters", on: showsMeters) { showsMeters.toggle() }
+        }
+    }
+
+    private func generatorTab(_ number: Int) -> some View {
+        let selected = number == generator
+        return HStack(spacing: 9) {
+            Circle()
+                .fill(selected ? Theme.amber : Theme.dead)
+                .frame(width: 8, height: 8)
+                .shadow(color: selected ? Theme.amber : .clear, radius: 5)
+            Text("MULTIVIEW \(number)")
+                .font(.system(size: 12, weight: .bold, design: .monospaced)).tracking(1.4)
+            Text("\(model.output(for: number)) · \(model.layout(for: number).title)")
+                .font(Theme.value(11)).foregroundStyle(Theme.dim)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 9)
+            .fill(selected ? Color(hex: 0x1D1913) : Theme.raised))
+        .overlay { RoundedRectangle(cornerRadius: 9)
+            .stroke(selected ? Theme.amber : Theme.line, lineWidth: 1) }
+        .contentShape(Rectangle())
+        .onTapGesture { openWindow(id: OrahControlApp.multiviewWindow, value: number) }
+    }
+
+    private func chip(_ title: String, on: Bool = false,
+                      _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(Theme.value(11.5))
+                .padding(.horizontal, 11).padding(.vertical, 6)
+                .foregroundStyle(on ? Color(hex: 0x141417) : Theme.dim)
+                .background(RoundedRectangle(cornerRadius: 7)
+                    .fill(on ? AnyShapeStyle(Theme.amberGradient)
+                             : AnyShapeStyle(Color(hex: 0x232327))))
+                .overlay { RoundedRectangle(cornerRadius: 7)
+                    .stroke(on ? Theme.amberGlow : Theme.line, lineWidth: 1) }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - The screen
+
+    private var screen: some View {
+        VStack(spacing: 6) {
+            if layout.boxes > 0 && layout.boxesOnTop { boxRow }
+            if layout.sourceRows > 0 || layout.boxes == 0 { sources }
+            if layout.boxes > 0 && !layout.boxesOnTop { boxRow }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(.black))
+        .overlay { RoundedRectangle(cornerRadius: 8).stroke(Theme.line, lineWidth: 1) }
+    }
+
+    private var boxRow: some View {
+        HStack(spacing: 6) {
+            if layout.boxes >= 1 { bigBox(role: .preview) }
+            if layout.boxes >= 2 { bigBox(role: .program) }
+            if layout.boxes >= 3 && model.isBoxOn(3) { quadBox(0, number: 3) }
+            if layout.boxes >= 4 && model.isBoxOn(4) { quadBox(1, number: 4) }
         }
     }
 
@@ -106,27 +130,24 @@ struct MultiviewPane: View {
             VideoView(sink: isProgram ? model.programSink : model.previewSink,
                       lens: isProgram ? model.programLens : model.previewLens)
 
-            Text(isProgram ? "PROGRAM" : "PREVIEW")
-                .font(.system(size: 8.5, weight: .bold, design: .monospaced))
-                .tracking(1.2)
-                .foregroundStyle(isProgram ? .white : Color(hex: 0x04240F))
-                .padding(.horizontal, 5).padding(.vertical, 2.5)
-                .background(accent)
-                .clipShape(RoundedRectangle(cornerRadius: 2))
-                .padding(5)
+            tag(isProgram ? "PROGRAM" : "PREVIEW",
+                fg: isProgram ? .white : Color(hex: 0x04240F), bg: accent)
 
-            caption(camera.map { "\($0.name.uppercased()) · CAM \(String(format: "%02d", $0.slot))" }
-                    ?? "—")
+            if showsMeters { meter }
+            if showsLabels {
+                caption(camera.map {
+                    "\($0.name.uppercased()) · CAM \(String(format: "%02d", $0.slot))" } ?? "—")
+            }
         }
         .aspectRatio(3.0/4.0, contentMode: .fit)
-        .frame(maxHeight: 238)
+        .frame(maxHeight: 300)
         .clipShape(RoundedRectangle(cornerRadius: 5))
         .overlay { RoundedRectangle(cornerRadius: 5).stroke(accent, lineWidth: 2) }
     }
 
     /// A quad box divided 2×2 gives quadrants of exactly the same 3:4 as the box
     /// itself, so four portraits fit one frame with nothing left over.
-    private func quadBox(_ index: Int) -> some View {
+    private func quadBox(_ index: Int, number: Int) -> some View {
         let cameras = index < model.freeBoxes.count ? model.freeBoxes[index] : []
 
         return ZStack(alignment: .topLeading) {
@@ -136,17 +157,9 @@ struct MultiviewPane: View {
                                 GridItem(.flexible(), spacing: 2)], spacing: 2) {
                 ForEach(0..<4, id: \.self) { quadrant in
                     ZStack(alignment: .bottomLeading) {
-                        Rectangle().fill(quadrant < cameras.count ? Theme.raised : Color(hex: 0x101012))
-                        if quadrant < cameras.count, !cameras[quadrant].isStreaming {
-                            Text(model.state(slot: cameras[quadrant].slot).label.uppercased())
-                                .font(Theme.label(7)).tracking(0.8)
-                                .foregroundStyle(Theme.faint)
-                                .multilineTextAlignment(.center)
-                                .lineLimit(2).minimumScaleFactor(0.7)
-                                .padding(.horizontal, 4)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
-                        if quadrant < cameras.count {
+                        Rectangle().fill(quadrant < cameras.count
+                                         ? Theme.raised : Color(hex: 0x101012))
+                        if quadrant < cameras.count, showsLabels {
                             Text(cameras[quadrant].name.uppercased())
                                 .font(.system(size: 8.5, weight: .semibold))
                                 .foregroundStyle(Theme.amberGlow)
@@ -162,18 +175,39 @@ struct MultiviewPane: View {
             }
             .padding(2)
 
-            Text("BOX \(index + 3)")
-                .font(.system(size: 8, weight: .bold, design: .monospaced)).tracking(1.2)
-                .foregroundStyle(Color(hex: 0x141417))
-                .padding(.horizontal, 5).padding(.vertical, 2.5)
-                .background(Theme.amber)
-                .clipShape(RoundedRectangle(cornerRadius: 2))
-                .padding(5)
+            tag("BIG \(number)", fg: Color(hex: 0x141417), bg: Theme.amber)
+            if showsMeters { meter }
         }
         .aspectRatio(3.0/4.0, contentMode: .fit)
-        .frame(maxHeight: 238)
+        .frame(maxHeight: 300)
         .clipShape(RoundedRectangle(cornerRadius: 5))
         .overlay { RoundedRectangle(cornerRadius: 5).stroke(Theme.amber, lineWidth: 2) }
+    }
+
+    private func tag(_ text: String, fg: Color, bg: Color) -> some View {
+        Text(text)
+            .font(.system(size: 8.5, weight: .bold, design: .monospaced)).tracking(1.2)
+            .foregroundStyle(fg)
+            .padding(.horizontal, 5).padding(.vertical, 2.5)
+            .background(bg)
+            .clipShape(RoundedRectangle(cornerRadius: 2))
+            .padding(5)
+    }
+
+    /// Indicative only — in the finished path these are fed by the LPCM that
+    /// arrives on lenses 0_0 and 1_0.
+    private var meter: some View {
+        VStack(spacing: 1) {
+            ForEach(0..<14, id: \.self) { index in
+                Rectangle()
+                    .fill(index < 4 ? Theme.program.opacity(0.25)
+                          : index < 7 ? Theme.amber.opacity(0.3)
+                          : Theme.preview.opacity(index > 9 ? 0.85 : 0.45))
+                    .frame(width: 5)
+            }
+        }
+        .padding(.vertical, 22).padding(.leading, 5)
+        .frame(maxHeight: .infinity, alignment: .leading)
     }
 
     private func caption(_ text: String) -> some View {
@@ -187,12 +221,9 @@ struct MultiviewPane: View {
             .padding(.bottom, 5)
     }
 
-    // MARK: - Sources
-
     private var sources: some View {
-        // In button order, so the wall reads left to right the same way the
-        // desk does, but with the gaps closed up.
         let present = model.buttons.compactMap { $0 }
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 5), count: layout.columns)
 
         return Group {
             if present.isEmpty {
@@ -200,8 +231,198 @@ struct MultiviewPane: View {
                     .font(Theme.label(10)).tracking(2).foregroundStyle(Theme.faint)
                     .frame(maxWidth: .infinity).padding(.vertical, 28)
             } else {
-                LazyVGrid(columns: sourceColumns, spacing: 6) {
-                    ForEach(present) { camera in SourceTile(camera: camera) }
+                LazyVGrid(columns: columns, spacing: 5) {
+                    ForEach(present.prefix(layout.sourceCount)) { camera in
+                        SourceTile(camera: camera, showsLabel: showsLabels)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Rail
+
+    private var rail: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            railSection("BOXES") {
+                VStack(spacing: 6) {
+                    boxRowEntry(1, key: "PVW", tint: Theme.preview,
+                                text: model.camera(slot: model.previewSlot)
+                                    .map { "\($0.name) · CAM \(String(format: "%02d", $0.slot)) — from switcher" } ?? "—")
+                    boxRowEntry(2, key: "PGM", tint: Theme.program,
+                                text: model.camera(slot: model.programSlot)
+                                    .map { "\($0.name) · CAM \(String(format: "%02d", $0.slot)) — from switcher" } ?? "—")
+                    boxRowEntry(3, key: "BIG 3", tint: Theme.amber,
+                                text: model.freeBoxes.first?.map(\.name).joined(separator: ", ") ?? "—")
+                    boxRowEntry(4, key: "BIG 4", tint: Theme.amber,
+                                text: model.freeBoxes.count > 1
+                                    ? model.freeBoxes[1].map(\.name).joined(separator: ", ") : "—")
+                }
+            }
+
+            railSection("LAYOUT") {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 7),
+                                    GridItem(.flexible(), spacing: 7)], spacing: 7) {
+                    ForEach(AppModel.MultiviewLayout.all) { option in
+                        LayoutChoice(layout: option, selected: option.id == layout.id) {
+                            model.setLayout(option, for: generator)
+                        }
+                    }
+                }
+            }
+
+            railSection("SAVED LAYOUTS") {
+                VStack(spacing: 6) {
+                    ForEach(model.savedLayouts) { saved in
+                        HStack(spacing: 9) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(saved.name).font(Theme.value(12))
+                                Text("\(AppModel.MultiviewLayout.named(saved.layoutID).title) · \(saved.when)")
+                                    .font(Theme.value(10)).foregroundStyle(Theme.faint)
+                            }
+                            Spacer()
+                            Button("Recall") { model.recall(saved, generator: generator) }
+                                .buttonStyle(.plain)
+                                .font(Theme.value(10.5)).foregroundStyle(Theme.dim)
+                                .padding(.horizontal, 8).padding(.vertical, 4)
+                                .background(RoundedRectangle(cornerRadius: 5)
+                                    .fill(Color(hex: 0x232327)))
+                        }
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.bg))
+                        .overlay { RoundedRectangle(cornerRadius: 6)
+                            .stroke(Theme.line, lineWidth: 1) }
+                    }
+                    Button("+ Save layout") {
+                        model.saveLayout(named: "Layout \(model.savedLayouts.count + 1)",
+                                         generator: generator)
+                    }
+                    .buttonStyle(.plain)
+                    .font(Theme.value(11)).foregroundStyle(Theme.dim)
+                    .frame(maxWidth: .infinity).padding(.vertical, 7)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0x232327)))
+                }
+            }
+        }
+    }
+
+    private func railSection<Content: View>(_ title: String,
+                                            @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(Theme.label(9.5)).tracking(2).foregroundStyle(Theme.faint)
+            content()
+        }
+        .padding(11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 9).fill(Theme.bg))
+        .overlay { RoundedRectangle(cornerRadius: 9).stroke(Theme.line, lineWidth: 1) }
+    }
+
+    /// Preview and program cannot be switched off — they are the two the
+    /// operator is judging, and a desk that can hide what is on air is a desk
+    /// nobody should be given.
+    private func boxRowEntry(_ number: Int, key: String, tint: Color,
+                             text: String) -> some View {
+        let locked = number < 3
+        let on = model.isBoxOn(number)
+
+        return HStack(spacing: 9) {
+            Text(key)
+                .font(.system(size: 9.5, weight: .bold, design: .monospaced)).tracking(0.8)
+                .foregroundStyle(tint).frame(width: 40, alignment: .leading)
+            Text(text)
+                .font(Theme.value(11)).foregroundStyle(Theme.dim)
+                .lineLimit(1).truncationMode(.tail)
+            Spacer(minLength: 0)
+            Capsule()
+                .fill(on ? Theme.amber.opacity(locked ? 0.4 : 1) : Color(hex: 0x232327))
+                .frame(width: 32, height: 18)
+                .overlay(alignment: on ? .trailing : .leading) {
+                    Circle().fill(on ? .white : Color(hex: 0x5A5A62))
+                        .frame(width: 13, height: 13).padding(2.5)
+                }
+                .opacity(locked ? 0.45 : 1)
+                .onTapGesture { model.toggleBox(number) }
+        }
+        .padding(.horizontal, 9).padding(.vertical, 7)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.panel))
+        .overlay { RoundedRectangle(cornerRadius: 6).stroke(Theme.line, lineWidth: 1) }
+    }
+}
+
+/// The little picture of a layout.
+///
+/// Drawn from the same numbers the screen is drawn from, so it can never show
+/// an arrangement the generator does not actually produce.
+@MainActor
+private struct LayoutChoice: View {
+    let layout: AppModel.MultiviewLayout
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                GeometryReader { geometry in
+                    let cell = geometry.size.width / CGFloat(layout.columns)
+                    let rows = layout.boxes > 0
+                        ? layout.boxHeight + layout.sourceRows : layout.sourceRows
+
+                    VStack(spacing: 1.5) {
+                        if layout.boxes > 0 && layout.boxesOnTop { band(cell) }
+                        sourceRows(cell)
+                        if layout.boxes > 0 && !layout.boxesOnTop { band(cell) }
+                    }
+                    .frame(height: cell * CGFloat(max(rows, 1)))
+                }
+                .aspectRatio(CGFloat(layout.columns) /
+                             CGFloat(max(1, (layout.boxes > 0 ? layout.boxHeight : 0)
+                                            + layout.sourceRows)),
+                             contentMode: .fit)
+
+                Text(layout.title)
+                    .font(Theme.value(9.5)).foregroundStyle(selected ? Theme.amber : Theme.dim)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Text("\(layout.sourceCount) sources")
+                    .font(Theme.value(8.5)).foregroundStyle(Theme.faint)
+            }
+            .padding(6)
+            .background(RoundedRectangle(cornerRadius: 6).fill(Theme.panel))
+            .overlay { RoundedRectangle(cornerRadius: 6)
+                .stroke(selected ? Theme.amber : Theme.line, lineWidth: selected ? 1.5 : 1) }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func band(_ cell: CGFloat) -> some View {
+        HStack(spacing: 1.5) {
+            ForEach(0..<layout.boxes, id: \.self) { _ in
+                Rectangle().fill(Color(hex: 0x7A7A84))
+                    .frame(width: cell * CGFloat(layout.boxWidth) - 1.5,
+                           height: cell * CGFloat(layout.boxHeight) - 1.5)
+            }
+            let rest = max(0, layout.columns - layout.boxes * layout.boxWidth)
+            if rest > 0 {
+                VStack(spacing: 1.5) {
+                    ForEach(0..<layout.boxHeight, id: \.self) { _ in
+                        HStack(spacing: 1.5) {
+                            ForEach(0..<rest, id: \.self) { _ in
+                                Rectangle().fill(Color(hex: 0x37373E)).frame(height: cell - 1.5)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func sourceRows(_ cell: CGFloat) -> some View {
+        VStack(spacing: 1.5) {
+            ForEach(0..<layout.sourceRows, id: \.self) { _ in
+                HStack(spacing: 1.5) {
+                    ForEach(0..<layout.columns, id: \.self) { _ in
+                        Rectangle().fill(Color(hex: 0x37373E)).frame(height: cell - 1.5)
+                    }
                 }
             }
         }
@@ -213,6 +434,7 @@ struct MultiviewPane: View {
 private struct SourceTile: View {
     @Environment(AppModel.self) private var model
     let camera: AppModel.Camera
+    var showsLabel = true
 
     private var isProgram: Bool { camera.slot == model.programSlot }
     private var isPreview: Bool { camera.slot == model.previewSlot }

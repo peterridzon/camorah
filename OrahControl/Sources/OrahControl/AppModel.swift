@@ -1444,38 +1444,104 @@ final class AppModel {
 
     // MARK: - Multiview layout
 
-    /// How each multiview window is laid out.
+    /// One way of arranging a multiview.
     ///
-    /// Two windows on two displays are rarely wanted the same way round: the
-    /// one in front of the operator carries the boxes, the one on the wall
-    /// carries every camera. So the layout belongs to the window, not to the
-    /// application.
-    enum MultiviewLayout: String, CaseIterable, Sendable {
-        case boxesAndSources, sourcesOnly, boxesOnly, twoBoxes
+    /// Taken from the design rather than invented here: a band of large boxes
+    /// at one end, a grid of sources filling the rest. Everything the interface
+    /// needs to draw a layout — and to draw the little picture of it in the
+    /// picker — comes from these numbers, so the thumbnail can never show
+    /// something the screen does not do.
+    struct MultiviewLayout: Identifiable, Hashable, Sendable {
+        let id: String
+        let title: String
+        let columns: Int
+        /// Rows of sources beneath (or above) the band of boxes.
+        let sourceRows: Int
+        let boxes: Int
+        /// A box measured in grid cells.
+        let boxWidth: Int
+        let boxHeight: Int
+        let boxesOnTop: Bool
 
-        var title: String {
-            switch self {
-            case .boxesAndSources: "4 boxes + sources"
-            case .sourcesOnly:     "wall — sources only"
-            case .boxesOnly:       "boxes only"
-            case .twoBoxes:        "preview + program"
-            }
+        /// Sources that fit: whatever is left beside the boxes, plus the rows.
+        var sourceCount: Int {
+            (boxes > 0 ? max(0, columns - boxes * boxWidth) * boxHeight : 0)
+            + columns * sourceRows
         }
-        var showsBoxes: Bool { self != .sourcesOnly }
-        var showsSources: Bool { self != .boxesOnly }
-        var showsQuads: Bool { self == .boxesAndSources || self == .boxesOnly }
+
+        static let all: [MultiviewLayout] = [
+            .init(id: "wall24",  title: "24-up wall · 8×3", columns: 8, sourceRows: 3,
+                  boxes: 0, boxWidth: 0, boxHeight: 0, boxesOnTop: true),
+            .init(id: "wall18",  title: "18-up wall · 6×3", columns: 6, sourceRows: 3,
+                  boxes: 0, boxWidth: 0, boxHeight: 0, boxesOnTop: true),
+            .init(id: "big4top", title: "4 boxes top + 16", columns: 8, sourceRows: 2,
+                  boxes: 4, boxWidth: 2, boxHeight: 2, boxesOnTop: true),
+            .init(id: "big4bot", title: "4 boxes bottom + 16", columns: 8, sourceRows: 2,
+                  boxes: 4, boxWidth: 2, boxHeight: 2, boxesOnTop: false),
+            .init(id: "big2top", title: "2 boxes top + 20", columns: 8, sourceRows: 2,
+                  boxes: 2, boxWidth: 2, boxHeight: 2, boxesOnTop: true),
+            .init(id: "big2bot", title: "2 boxes bottom + 20", columns: 8, sourceRows: 2,
+                  boxes: 2, boxWidth: 2, boxHeight: 2, boxesOnTop: false),
+            .init(id: "pgmhalf", title: "program half + 12", columns: 8, sourceRows: 2,
+                  boxes: 1, boxWidth: 4, boxHeight: 3, boxesOnTop: true),
+            .init(id: "boxonly", title: "boxes only", columns: 8, sourceRows: 0,
+                  boxes: 4, boxWidth: 2, boxHeight: 3, boxesOnTop: true),
+        ]
+
+        static func named(_ id: String) -> MultiviewLayout {
+            all.first { $0.id == id } ?? all[2]
+        }
     }
 
-    private(set) var multiviewLayout: [Int: MultiviewLayout] = [:]
+    private(set) var multiviewLayout: [Int: String] = [:]
 
     func layout(for generator: Int) -> MultiviewLayout {
-        multiviewLayout[generator] ?? (generator == 1 ? .boxesAndSources : .sourcesOnly)
+        MultiviewLayout.named(multiviewLayout[generator] ?? (generator == 1 ? "big4top" : "wall24"))
     }
 
     func setLayout(_ layout: MultiviewLayout, for generator: Int) {
-        multiviewLayout[generator] = layout
-        Log.info("ui", "multiview \(generator) laid out as \(layout.rawValue)")
+        multiviewLayout[generator] = layout.id
+        Log.info("ui", "multiview \(generator) laid out as \(layout.id)")
     }
+
+    /// Where each generator's picture goes, for the label on its tab.
+    func output(for generator: Int) -> String { "Window · display \(generator + 1)" }
+
+    // MARK: - Saved layouts
+
+    struct SavedLayout: Identifiable, Hashable, Sendable {
+        let id = UUID()
+        var name: String
+        var layoutID: String
+        var when: String
+    }
+
+    private(set) var savedLayouts: [SavedLayout] = [
+        .init(name: "Gallery — show", layoutID: "big4top", when: "default"),
+        .init(name: "Wall — full rig", layoutID: "wall24", when: "default"),
+    ]
+
+    func saveLayout(named name: String, generator: Int) {
+        let stamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .short)
+        savedLayouts.insert(.init(name: name, layoutID: layout(for: generator).id, when: stamp),
+                            at: 0)
+    }
+
+    func recall(_ saved: SavedLayout, generator: Int) {
+        setLayout(MultiviewLayout.named(saved.layoutID), for: generator)
+    }
+
+    /// Whether the two free boxes are switched on. Preview and program are
+    /// bound to the desk and cannot be turned off — they are the two the
+    /// operator is judging.
+    private(set) var boxEnabled: [Int: Bool] = [3: true, 4: true]
+
+    func toggleBox(_ number: Int) {
+        guard number >= 3 else { return }
+        boxEnabled[number] = !(boxEnabled[number] ?? true)
+    }
+
+    func isBoxOn(_ number: Int) -> Bool { number < 3 || (boxEnabled[number] ?? true) }
 
     // MARK: - Which lens a source tile shows
 
