@@ -11,6 +11,11 @@ OrahControl/build/
 # automatically; a private key does not belong in a public repository.
 tools/auto.key
 tools/auto.crt
+# MediaMTX writes these beside whatever directory it is started from, so they
+# turn up in more than one place. Both of them, everywhere, always.
+**/auto.key
+**/auto.crt
+tools/auto.crt
 
 # Deploy credentials — never commit
 .deploy.env

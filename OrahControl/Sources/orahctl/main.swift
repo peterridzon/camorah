@@ -141,6 +141,15 @@ case "selftest":
     let desk = DeskPlanSelfTest.run()
     result.passed += desk.passed
     result.failed += desk.failed
+    // The byte loop every lens of every camera runs through.
+    let units = AccessUnitSelfTest.run()
+    result.passed += units.passed
+    result.failed += units.failed
+    // What the desk does about cameras that go quiet, and streams that are not
+    // there yet.
+    let fleet = FleetPolicySelfTest.run()
+    result.passed += fleet.passed
+    result.failed += fleet.failed
     for name in result.passed { print("  ok    \(name)") }
     for failure in result.failed { print("  FAIL  \(failure.name): \(failure.detail)") }
     print("\n\(result.passed.count) passed, \(result.failed.count) failed")

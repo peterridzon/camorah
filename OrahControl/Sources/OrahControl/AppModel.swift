@@ -1354,17 +1354,19 @@ final class AppModel {
                 continue
             }
 
-            // A camera whose pictures are arriving is on the network, whatever a
-            // ping says. Frames are proof; a missed packet is an opinion — and
-            // the desk drew a live tile with "not on the network" written across
-            // it because the opinion won.
-            if !camera.lensesReady.isEmpty {
+            switch FleetPolicy.presence(answered: false,
+                                        lensesReady: camera.lensesReady.count,
+                                        misses: missedPresence[camera.serial] ?? 0) {
+            case .here:
+                // Pictures are presence, whatever the ping says.
                 missedPresence[camera.serial] = 0
                 continue
+            case .quiet(let misses):
+                missedPresence[camera.serial] = misses
+            case .gone:
+                missedPresence[camera.serial] = 5
             }
-
-            let misses = (missedPresence[camera.serial] ?? 0) + 1
-            missedPresence[camera.serial] = misses
+            let misses = missedPresence[camera.serial] ?? 0
 
             // Two misses — about four seconds — and the tile stops claiming a
             // connection and stops showing lenses MediaMTX has not noticed are
@@ -1464,7 +1466,7 @@ final class AppModel {
             // times, and knocking on that one all evening is both noise in the
             // log and traffic at a camera that is trying to boot.
             let tries = knockCount[camera.serial] ?? 0
-            let floor: TimeInterval = tries < 3 ? 10 : tries < 10 ? 30 : 60
+            let floor = FleetPolicy.knockFloor(attempts: tries)
             let last = lastKnock[camera.serial] ?? .distantPast
             guard Date().timeIntervalSince(last) > floor else { continue }
             lastKnock[camera.serial] = Date()

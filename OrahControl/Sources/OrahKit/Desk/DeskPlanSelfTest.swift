@@ -29,12 +29,29 @@ public enum DeskPlanSelfTest {
                   "got \(plan.sources)")
         }
 
-        // Half a camera is a normal camera. Two SoCs, and one of them fails to
-        // start often enough that waiting for all four is waiting for ever.
+        // Half a camera is not a camera you can cut to. It belongs in setup.
         do {
-            let plan = DeskPlanner.plan(ready: [8: [2, 3]], program: 8, preview: nil, budget: 12)
-            check("half a camera decodes its half", plan.lenses(for: 8) == [2, 3],
-                  "got \(plan.lenses(for: 8))")
+            let plan = DeskPlanner.plan(ready: [8: [2, 3]], program: nil, preview: nil,
+                                        budget: 12)
+            check("half a camera is not in the switching feed", plan.sources.isEmpty,
+                  "got \(plan.sources)")
+        }
+
+        // Three of four is a fault, not a camera.
+        do {
+            let plan = DeskPlanner.plan(ready: [8: [0, 1, 2]], program: nil, preview: nil,
+                                        budget: 12)
+            check("three of four lenses is still not on the desk", plan.sources.isEmpty,
+                  "got \(plan.sources)")
+        }
+
+        // But a camera already on air is not dropped because it lost a lens.
+        // Taking the programme off the air is worse than the fault.
+        do {
+            let plan = DeskPlanner.plan(ready: [8: [0, 1, 2]], program: 8, preview: nil,
+                                        budget: 12)
+            check("a camera on air survives losing a lens",
+                  plan.lenses(for: 8) == [0, 1, 2], "got \(plan.lenses(for: 8))")
         }
 
         // Programme and preview cost four decodes; everybody else costs one.
@@ -47,13 +64,13 @@ public enum DeskPlanSelfTest {
                   "got \(plan.lenses(for: 3))")
         }
 
-        // A tile set to a lens that never came up shows the lens that did,
-        // rather than a black rectangle with a number on it.
+        // A camera on air whose tile is set to a lens it has lost shows one it
+        // still has, rather than a black rectangle with a number on it.
         do {
-            let plan = DeskPlanner.plan(ready: [5: [2, 3]], program: nil, preview: nil,
+            let plan = DeskPlanner.plan(ready: [5: [2, 3]], program: 5, preview: nil,
                                         tileLens: [5: 0], budget: 12)
-            check("thumbnail falls back to a lens that exists",
-                  plan.lenses(for: 5) == [2], "got \(plan.lenses(for: 5))")
+            check("a lost lens falls back to one that exists",
+                  plan.lenses(for: 5) == [2, 3], "got \(plan.lenses(for: 5))")
         }
 
         // And when the chosen lens does exist, it is the one decoded — this is
@@ -80,9 +97,17 @@ public enum DeskPlanSelfTest {
         // what is there, or the desk goes black exactly when somebody is trying
         // to find a shot.
         do {
-            let plan = DeskPlanner.plan(ready: [4: [0, 1]], program: nil, preview: nil, budget: 12)
+            let plan = DeskPlanner.plan(ready: [4: [0, 1, 2, 3]], program: nil, preview: nil,
+                                        budget: 12)
             check("no programme still decodes the wall", plan.lenses(for: 4) == [0],
                   "got \(plan.lenses(for: 4))")
+        }
+
+        // What "ready for air" means, on its own.
+        do {
+            check("four lenses is ready", DeskPlanner.isReadyForAir(lenses: [0, 1, 2, 3]))
+            check("three is not", !DeskPlanner.isReadyForAir(lenses: [0, 1, 2]))
+            check("none is not", !DeskPlanner.isReadyForAir(lenses: []))
         }
 
         // The same inputs must give the same plan, or the desk rebuilds sources

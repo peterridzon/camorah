@@ -34,9 +34,7 @@ public final class H264StreamReader: @unchecked Sendable {
     /// Called for every decoded frame, on the decoder's queue.
     public var onFrame: ((CVPixelBuffer, CMTime) -> Void)?
 
-    private var pending = Data()
-    private var currentUnit = Data()
-    private var currentHasVCL = false
+    private var splitter = AccessUnitSplitter()
     private var frameIndex: Int64 = 0
 
     public private(set) var framesIn = 0
@@ -70,9 +68,8 @@ public final class H264StreamReader: @unchecked Sendable {
         // A reconnect is a new byte stream with its own parameter sets, so
         // whatever was half-parsed from the last one has to go.
         lock.withLock {
-            pending.removeAll(keepingCapacity: true)
-            currentUnit.removeAll(keepingCapacity: true)
-            currentHasVCL = false
+            // A reconnect is a new byte stream with its own parameter sets.
+            splitter.reset()
             attempts += 1
         }
 
@@ -95,8 +92,7 @@ public final class H264StreamReader: @unchecked Sendable {
             guard let self else { return }
             let chunk = handle.availableData
             guard !chunk.isEmpty else { return }
-            self.pending.append(chunk)
-            self.drainAccessUnits()
+            for unit in self.splitter.push(chunk) { self.emit(unit) }
         }
 
         process.terminationHandler = { [weak self] _ in
@@ -132,11 +128,8 @@ public final class H264StreamReader: @unchecked Sendable {
         let (shouldRetry, count) = lock.withLock { (!stopped, attempts) }
         guard shouldRetry else { return }
 
-        let delay: Double = count <= 10 ? 1.5 : count <= 20 ? 4 : 10
-
-        // A camera that never comes up would otherwise write a line a second for
-        // the rest of the show.
-        if count == 1 || count % 15 == 0 {
+        let delay = ReaderPolicy.retryDelay(attempt: count)
+        if ReaderPolicy.shouldLog(attempt: count) {
             Log.info("read", "waiting for \(url)")
         }
 
@@ -173,51 +166,15 @@ public final class H264StreamReader: @unchecked Sendable {
         decoder.flush()
     }
 
-    // A raw H.264 pipe is a byte stream, not frames. A new access unit begins at
-    // the first picture NAL that follows a previous one; parameter sets and SEI
-    // belong to whatever comes next.
-    private func drainAccessUnits() {
-        let bytes = [UInt8](pending)
-        var starts: [(offset: Int, codeLength: Int)] = []
+    // Splitting the byte stream into access units is its own part, with its own
+    // rules and its own tests — `AccessUnitSplitter`. It lived here, where it
+    // could not be tested, and it broke twice in one evening: once by rescanning
+    // the whole buffer on every chunk from the pipe, and once by finding its own
+    // start code at offset zero and spinning at eight hundred percent of a core.
+    // The reader owns the process and the pipe. It does not own the bytes.
 
-        var i = 0
-        while i + 3 <= bytes.count {
-            if bytes[i] == 0, bytes[i + 1] == 0 {
-                if bytes[i + 2] == 1 {
-                    starts.append((i, 3)); i += 3; continue
-                }
-                if i + 4 <= bytes.count, bytes[i + 2] == 0, bytes[i + 3] == 1 {
-                    starts.append((i, 4)); i += 4; continue
-                }
-            }
-            i += 1
-        }
-
-        guard starts.count >= 2 else { return }
-
-        for index in 0..<(starts.count - 1) {
-            let begin = starts[index].offset
-            let end = starts[index + 1].offset
-            let nalStart = begin + starts[index].codeLength
-            guard nalStart < end, nalStart < bytes.count else { continue }
-
-            let nalType = bytes[nalStart] & 0x1F
-            let isVCL = (1...5).contains(nalType)
-
-            if isVCL && currentHasVCL { emitAccessUnit() }
-            currentUnit.append(contentsOf: bytes[begin..<end])
-            if isVCL { currentHasVCL = true }
-        }
-
-        pending = Data(bytes[starts[starts.count - 1].offset...])
-    }
-
-    private func emitAccessUnit() {
-        defer {
-            currentUnit.removeAll(keepingCapacity: true)
-            currentHasVCL = false
-        }
-        guard !currentUnit.isEmpty else { return }
+    private func emit(_ unit: Data) {
+        guard !unit.isEmpty else { return }
         framesIn += 1
 
         // A raw stream carries no timestamps. The switcher's output clock is what
@@ -225,7 +182,7 @@ public final class H264StreamReader: @unchecked Sendable {
         // ordered.
         let pts = CMTime(value: frameIndex, timescale: fps)
         frameIndex += 1
-        try? decoder.decode(annexB: currentUnit, pts: pts)
+        try? decoder.decode(annexB: unit, pts: pts)
     }
 }
 

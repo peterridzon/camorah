@@ -25,6 +25,21 @@ public struct DeskPlan: Equatable, Sendable {
 
 public enum DeskPlanner {
 
+    /// Every lens a camera has. Four streams, two boards.
+    public static let lensesPerCamera = 4
+
+    /// Whether a camera may appear on the buses at all.
+    ///
+    /// **A camera that has not come up completely is not in the switching feed.**
+    /// It belongs in setup, where it can be seen and fixed. Half a camera on a
+    /// programme key is a key that gives you half a camera — in front of an
+    /// audience, with no warning, because the tile looked like all the others.
+    ///
+    /// Two SoCs, four streams: three of four is a fault, not a camera.
+    public static func isReadyForAir(lenses: Set<Int>) -> Bool {
+        lenses.count == lensesPerCamera
+    }
+
     /// - Parameters:
     ///   - ready: which lenses are actually publishing, per camera. Not what a
     ///     camera claims — what MediaMTX has.
@@ -40,7 +55,15 @@ public enum DeskPlanner {
 
         // Rule: only what is on the wire. A reader attached to a lens nobody is
         // publishing to relaunches a process for ever.
-        let live = ready.filter { !$0.value.isEmpty }
+        //
+        // And only what is *whole*. A camera that is still coming up, or that
+        // came up with three of its four streams, is a setup problem — it is
+        // shown in the rig check with what is missing, and it is not on the
+        // desk. The exception is a camera already on air: losing a lens
+        // mid-show is not a reason to take the programme off the air.
+        let live = ready.filter { slot, lenses in
+            !lenses.isEmpty && (isReadyForAir(lenses: lenses) || slot == program)
+        }
         var sources: [Int: [Int]] = [:]
 
         // Rule: the desk pair decodes every lens it has, because the mix sends
