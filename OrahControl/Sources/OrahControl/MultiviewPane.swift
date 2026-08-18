@@ -425,11 +425,16 @@ private struct SourceTile: View {
             // Only programme and preview are decoded — that is the rule that
             // makes twenty-four cameras possible on one Mac — so those two
             // tiles carry a live picture and the rest carry their status.
-            if isProgram {
-                VideoView(sink: model.programSink, lens: model.lens(for: camera.slot))
-            } else if isPreview {
-                VideoView(sink: model.previewSink, lens: model.lens(for: camera.slot))
-            }
+            // Its own camera, at its own lens.
+            //
+            // These two tiles used to borrow the programme and preview monitors,
+            // which is wrong twice over: during a dissolve the programme monitor
+            // is the *mix*, so the tile showed two cameras at once, and the
+            // monitor's lens is not the tile's, so the picture could arrive
+            // rotated for a lens it was not showing. Every camera has a sink of
+            // its own now, and a tile only ever reads that one.
+            VideoView(sink: model.cameraSink(slot: camera.slot),
+                      lens: model.lens(for: camera.slot))
 
             Group {
                 // What the camera is doing, while it is not yet a picture.
@@ -534,7 +539,7 @@ private struct SourceTile: View {
     /// rather than as a shorter row.
     private func lensKey(_ lens: Int, camera: AppModel.Camera) -> some View {
         let shown = model.lens(for: camera.slot) == lens
-        let arrived = lens < camera.lensesArriving
+        let arrived = camera.lensesReady.contains(lens)
 
         return Button {
             model.setLens(lens, for: camera.slot)

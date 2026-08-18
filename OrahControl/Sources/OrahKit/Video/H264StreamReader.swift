@@ -115,14 +115,24 @@ public final class H264StreamReader: @unchecked Sendable {
         }
     }
 
-    /// Waits a second and tries again, for as long as the source is attached.
+    /// Tries again, backing off.
     ///
-    /// The desk lets a camera go as soon as it stops streaming, so this does not
-    /// run forever against a camera that is off — it runs exactly while one is
-    /// expected and has not arrived yet.
+    /// It used to try once a second for as long as the source was attached, and
+    /// each try is a process launched and an RTMP connection opened and closed.
+    /// One reader doing that is invisible; a rig where several cameras are on
+    /// the network but not publishing is a dozen readers doing it at once, and
+    /// that was enough to flood MediaMTX, fill the log, and make the desk lag —
+    /// a spin loop wearing the costume of a retry.
+    ///
+    /// Quick at first, because a camera takes about fifteen seconds to publish
+    /// after being told to start and the picture should appear the moment it
+    /// does. Then it slows to once every ten seconds, which is often enough for
+    /// something nobody is waiting on.
     private func relaunchLater() {
         let (shouldRetry, count) = lock.withLock { (!stopped, attempts) }
         guard shouldRetry else { return }
+
+        let delay: Double = count <= 10 ? 1.5 : count <= 20 ? 4 : 10
 
         // A camera that never comes up would otherwise write a line a second for
         // the rest of the show.
@@ -131,7 +141,7 @@ public final class H264StreamReader: @unchecked Sendable {
         }
 
         let task = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1))
+            try? await Task.sleep(for: .seconds(delay))
             guard let self, self.lock.withLock({ !self.stopped }) else { return }
             do { try self.launch() } catch { self.relaunchLater() }
         }
@@ -223,34 +233,68 @@ public final class H264StreamReader: @unchecked Sendable {
 public final class CameraSource: @unchecked Sendable {
 
     public let slot: Int
-    private var readers: [H264StreamReader] = []
+    private var readers: [Int: H264StreamReader] = [:]
+    private var base = ""
+    private var fps: Int32 = 30
+    private weak var switcher: Switcher?
 
     public init(slot: Int) {
         self.slot = slot
     }
 
-    /// Attaches to `rtmp://host:1935/camNN/` and routes every lens into `switcher`.
-    public func attach(to switcher: Switcher, rtmpBase: String, fps: Int32 = 30) throws {
-        let base = rtmpBase.hasSuffix("/") ? rtmpBase : rtmpBase + "/"
-        switcher.addSource(slot: slot)
+    /// Which lenses this source is currently decoding.
+    public var lenses: [Int] { readers.keys.sorted() }
 
-        for (index, lens) in Switcher.lenses.enumerated() {
-            let reader = H264StreamReader(url: base + lens, fps: fps)
+    /// Attaches to `rtmp://host:1935/camNN/` and routes lenses into `switcher`.
+    ///
+    /// Not always all four. A camera on the desk needs every lens, because the
+    /// mix sends four lanes out. A camera that is only a thumbnail needs the one
+    /// lens somebody is looking at — decoding the other three to throw them away
+    /// is three hardware decodes per camera, and with two dozen cameras that is
+    /// the difference between a multiview and a slideshow.
+    public func attach(to switcher: Switcher, rtmpBase: String, fps: Int32 = 30,
+                       lenses: [Int] = [0, 1, 2, 3]) throws {
+        self.base = rtmpBase.hasSuffix("/") ? rtmpBase : rtmpBase + "/"
+        self.fps = fps
+        self.switcher = switcher
+        switcher.addSource(slot: slot)
+        try setLenses(lenses)
+        Log.info("switch", "camera \(slot) attached from \(base)")
+    }
+
+    /// Adds and removes lenses without disturbing the ones already running.
+    ///
+    /// This is why a source is never rebuilt to change its lenses. Putting a
+    /// thumbnail on the programme bus used to stop its reader and start four new
+    /// ones, so the picture the operator had been looking at went black and came
+    /// back three seconds later — the exact three seconds in which a cut is
+    /// supposed to have happened. The lens that is already decoding keeps
+    /// decoding; the other three join it when their first keyframe lands.
+    public func setLenses(_ wanted: [Int]) throws {
+        guard let switcher else { return }
+        let target = Set(wanted.filter { (0..<4).contains($0) })
+
+        for (index, reader) in readers where !target.contains(index) {
+            reader.stop()
+            readers[index] = nil
+        }
+
+        for index in target.sorted() where readers[index] == nil {
+            let reader = H264StreamReader(url: base + Switcher.lenses[index], fps: fps)
             reader.onFrame = { [weak switcher] buffer, pts in
                 switcher?.submit(slot: self.slot, lens: index, frame: buffer, pts: pts)
             }
             try reader.start()
-            readers.append(reader)
+            readers[index] = reader
         }
-        Log.info("switch", "camera \(slot) attached from \(base)")
     }
 
     public func stop() {
-        readers.forEach { $0.stop() }
+        readers.values.forEach { $0.stop() }
         readers.removeAll()
     }
 
     public var framesIn: Int {
-        readers.reduce(0) { $0 + $1.framesIn }
+        readers.values.reduce(0) { $0 + $1.framesIn }
     }
 }

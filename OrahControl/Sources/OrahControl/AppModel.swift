@@ -30,7 +30,22 @@ final class AppModel {
         var slot: Int
         var label: String
         var state: CameraSession.State = .disconnected
-        var lensesArriving: Int = 0
+        /// *Which* lenses are publishing, not how many.
+        ///
+        /// The count was enough to draw a status and not enough to decide what
+        /// to decode: a camera is two SoCs, so it routinely publishes 1_0 and
+        /// 1_1 while 0_0 never appears. Attaching a reader to a lens that is not
+        /// there is a process launched and thrown away, over and over.
+        var lensesReady: Set<Int> = []
+
+        /// Derived, never stored.
+        ///
+        /// It was a stored count next to the set, and the two disagreed the
+        /// first time a camera left the network: the count was cleared in three
+        /// places, the set in one, so the rig check drew a camera as gone with
+        /// four lenses lit under it. Two fields for one fact is a bug with a
+        /// delay on it.
+        var lensesArriving: Int { lensesReady.count }
         var delayMilliseconds: Double = 0
 
         var id: String { serial }
@@ -272,12 +287,27 @@ final class AppModel {
     /// on one Mac.
     private var deskSources: [Int: CameraSource] = [:]
 
+    /// When each slot last had something to decode, so a path that blinks does
+    /// not tear a working source down.
+    private var lastReady: [Int: Date] = [:]
+
     /// How many cameras to keep decoded at once.
     ///
-    /// Four is two hardware decodes for the desk and two spare, which an M1 Pro
-    /// does without noticing. Past that the multiview is meant to run on the
-    /// nodes' proxies, which is the whole reason the nodes exist.
-    var deskDecodeBudget = 4
+    /// Program and preview cost four decodes each; every other camera costs one,
+    /// for its thumbnail. Twenty-four of those plus the desk is thirty-two
+    /// hardware decodes, which is inside what an M-series machine will do — and
+    /// the load meter on the bar is there so it stops being a guess.
+    ///
+    /// Twelve until it has been measured on a full rig. Each camera past the
+    /// desk pair costs a process, a decoder and a socket, and finding the
+    /// ceiling in front of an audience is not finding it.
+    var deskDecodeBudget = 12
+
+    /// What the machine is doing. Sampled once a second, next to the camera
+    /// count, because running out of Mac looks like nothing until it looks like
+    /// a dropped frame.
+    private(set) var load = MachineLoad()
+    private let loadMeter = LoadMeter()
 
     /// When Start was pressed, so the wait can be shown as a wait rather than as
     /// nothing happening.
@@ -486,7 +516,7 @@ final class AppModel {
             // departure. `dropCamerasThatWentAway` is what actually decides.
             if let index = cameras.firstIndex(where: { $0.serviceName == serviceName }) {
                 cameras[index].state = .disconnected
-                cameras[index].lensesArriving = 0
+                cameras[index].lensesReady = []
             }
         case .browserFailed(let message):
             lastError = "Discovery failed: \(message)"
@@ -917,28 +947,60 @@ final class AppModel {
         // build it back up on every click — which is why a thumbnail took seconds
         // to appear in preview. Keeping them decoded makes selection instant, and
         // costs nothing that is not already spare.
-        let available = cameras
-            .filter { $0.isStreaming || $0.lensesArriving > 0 }
-            .map(\.slot)
+        // What to decode is not decided here. It is a pure function of what is
+        // on the wire and what the desk is doing — see `DeskPlanner`, and
+        // `docs/ARCHITECTURE.md` part 3. Keeping it out of this view model is
+        // the point: every window that changed something in passing changed
+        // this, and that is how a change to the multiview blacked out the
+        // colour panel.
+        let ready = Dictionary(uniqueKeysWithValues:
+            cameras.filter { !$0.lensesReady.isEmpty }.map { ($0.slot, $0.lensesReady) })
+        let plan = DeskPlanner.plan(ready: ready,
+                                    program: programSlot,
+                                    preview: previewSlot,
+                                    tileLens: tileLens,
+                                    budget: deskDecodeBudget)
+        let wanted = plan.sources
 
-        var wanted = Set([programSlot, previewSlot].compactMap { $0 })
-            .filter { available.contains($0) }
+        // A source is rebuilt when its lens set changes — which is what happens
+        // when a thumbnail is switched to another lens, or a camera is put on
+        // the desk and now needs all four.
+        //
+        // Torn down only on a *sustained* absence, though. MediaMTX reports a
+        // path as not ready for a moment whenever a publisher reconnects, and
+        // acting on that instantly produced a camera that was released and
+        // rebuilt every two seconds — each rebuild costing a process, a socket
+        // and every frame buffered so far. Evidence to build, patience to
+        // demolish.
+        let now = Date()
+        for slot in wanted.keys { lastReady[slot] = now }
 
-        for slot in available.sorted() where wanted.count < deskDecodeBudget {
-            wanted.insert(slot)
-        }
-
-        for slot in deskSources.keys where !wanted.contains(slot) {
-            deskSources[slot]?.stop()
+        for (slot, source) in deskSources {
+            if let target = wanted[slot]?.sorted() {
+                // Lenses are added and removed in place — never by rebuilding
+                // the source, which would black out a picture that is already
+                // running and, if it was going to air, do it in front of
+                // everybody.
+                if source.lenses != target {
+                    do { try source.setLenses(target) }
+                    catch { Log.warn("desk", "cam\(slot) lenses: \(error)") }
+                }
+                continue
+            }
+            let gone = now.timeIntervalSince(lastReady[slot] ?? .distantPast)
+            guard gone > 8 else { continue }
+            source.stop()
             deskSources[slot] = nil
             switcher.removeSource(slot: slot)
+            cameraSinkStore[slot]?.push(nil)
             Log.info("desk", "cam\(slot) released")
         }
 
-        for slot in wanted where deskSources[slot] == nil {
+        for (slot, lenses) in wanted where deskSources[slot] == nil {
             let source = CameraSource(slot: slot)
             do {
-                try source.attach(to: switcher, rtmpBase: rtmpBase(forSlot: slot))
+                try source.attach(to: switcher, rtmpBase: rtmpBase(forSlot: slot),
+                                  lenses: lenses)
                 deskSources[slot] = source
                 if let delay = camera(slot: slot)?.delayMilliseconds {
                     switcher.setDelay(slot: slot, seconds: delay / 1000)
@@ -948,6 +1010,8 @@ final class AppModel {
                 Log.error("desk", "cam\(slot): \(error)")
             }
         }
+
+        refreshPictureTaps()
 
         switcher.setProgram(slot: programSlot)
         switcher.setPreview(slot: previewSlot)
@@ -1163,6 +1227,7 @@ final class AppModel {
             var tick = 0
             while !Task.isCancelled {
                 checkOwnAddress()
+                load = loadMeter.sample()
                 await pollStreams()
                 if tick % 2 == 0 { await pollNodes() }
                 if tick % 5 == 0 { reportDesk() }
@@ -1285,6 +1350,15 @@ final class AppModel {
                 continue
             }
 
+            // A camera whose pictures are arriving is on the network, whatever a
+            // ping says. Frames are proof; a missed packet is an opinion — and
+            // the desk drew a live tile with "not on the network" written across
+            // it because the opinion won.
+            if !camera.lensesReady.isEmpty {
+                missedPresence[camera.serial] = 0
+                continue
+            }
+
             let misses = (missedPresence[camera.serial] ?? 0) + 1
             missedPresence[camera.serial] = misses
 
@@ -1294,7 +1368,7 @@ final class AppModel {
             // the plug.
             if misses == 2 {
                 cameras[index].state = .disconnected
-                cameras[index].lensesArriving = 0
+                cameras[index].lensesReady = []
                 startRequestedAt[camera.slot] = nil
                 startStep[camera.slot] = nil
                 changed = true
@@ -1587,14 +1661,9 @@ final class AppModel {
 
     func setLens(_ lens: Int, for slot: Int) {
         tileLens[slot] = max(0, min(3, lens))
-        if !cameraSinkStore.isEmpty {
-            switcher?.inspect(cameras: cameraSinkStore.keys.reduce(into: [:]) {
-                $0[$1] = self.lens(for: $1)
-            })
-        }
-        // Program and preview are the two the switcher actually decodes, so
-        // changing their lens is the one case that has to reach it.
-        if slot == programSlot || slot == previewSlot { syncDesk() }
+        // A thumbnail decodes only the lens it is showing, so asking for another
+        // one is a change to what is decoded, not just to what is drawn.
+        syncDesk()
     }
 
     // MARK: - Multiview boxes
@@ -1659,12 +1728,28 @@ final class AppModel {
         return made
     }
 
-    /// Watch several cameras at once, each at its own chosen lens.
-    func watch(cameras: [Int], bypass: Bool = false) {
+    /// Whether the per-camera pictures are shown before or after their grade.
+    /// Only the colour panel has an opinion; everything else wants them graded.
+    private(set) var pictureBypass = false
+
+    func setPictureBypass(_ bypass: Bool) {
+        guard bypass != pictureBypass else { return }
+        pictureBypass = bypass
+        refreshPictureTaps()
+    }
+
+    /// Every decoded camera makes a picture for its own sink, at its own lens.
+    ///
+    /// This used to be turned on by whichever view happened to want it, which
+    /// is how a tile ended up borrowing the programme monitor's picture: two
+    /// views asking for pictures fought over one setting, and the loser drew
+    /// somebody else's camera. One map, kept in step with what is decoded, and
+    /// a tile simply reads its own sink.
+    private func refreshPictureTaps() {
         var map: [Int: Int] = [:]
-        for slot in cameras { map[slot] = lens(for: slot) }
-        switcher?.inspect(cameras: map, bypass: bypass)
-        if cameras.isEmpty { for sink in cameraSinkStore.values { sink.push(nil) } }
+        for slot in deskSources.keys { map[slot] = lens(for: slot) }
+        switcher?.inspect(cameras: map, bypass: pictureBypass)
+        for (slot, sink) in cameraSinkStore where map[slot] == nil { sink.push(nil) }
     }
 
     /// The grade for a camera, by slot. Neutral when it has never been touched.
@@ -1832,15 +1917,16 @@ final class AppModel {
               let items = json["items"] as? [[String: Any]]
         else { return }
 
-        var arriving: [Int: Int] = [:]
+        var ready: [Int: Set<Int>] = [:]
         for item in items {
             guard let name = item["name"] as? String,
                   item["ready"] as? Bool == true,
                   name.hasPrefix("cam"),
                   let slash = name.firstIndex(of: "/"),
-                  let slot = Int(name[name.index(name.startIndex, offsetBy: 3)..<slash])
+                  let slot = Int(name[name.index(name.startIndex, offsetBy: 3)..<slash]),
+                  let lens = Switcher.lenses.firstIndex(of: String(name[name.index(after: slash)...]))
             else { continue }
-            arriving[slot, default: 0] += 1
+            ready[slot, default: []].insert(lens)
         }
 
         var changed = false
@@ -1850,9 +1936,10 @@ final class AppModel {
             // open until the read times out, two minutes after the power went.
             // Presence is the authority on whether the camera is there at all.
             let missing = (missedPresence[cameras[index].serial] ?? 0) >= 2
-            let count = missing ? 0 : (arriving[slot] ?? 0)
-            if cameras[index].lensesArriving != count {
-                cameras[index].lensesArriving = count
+            let lenses = missing ? [] : (ready[slot] ?? [])
+            let count = lenses.count
+            if cameras[index].lensesReady != lenses {
+                cameras[index].lensesReady = lenses
                 changed = true
             }
 

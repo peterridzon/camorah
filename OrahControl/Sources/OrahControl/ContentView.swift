@@ -88,6 +88,8 @@ private struct StatusStrip: View {
 
             Spacer()
 
+            LoadMeters()
+
             // The output monitor belongs one click away, not buried in a menu:
             // it is the only place the encoded result can actually be judged.
             OpenOutputMonitorButton()
@@ -112,6 +114,62 @@ private struct StatusStrip: View {
         }
         .padding(.horizontal, 16).padding(.vertical, 9)
         .background(Theme.panel)
+    }
+
+    /// CPU and GPU, as bars rather than numbers.
+    ///
+    /// The number is there too, but the bar is what gets read across a gallery
+    /// — and what matters is not 61% or 64%, it is whether the machine still
+    /// has room before another camera is plugged in. Amber up to three
+    /// quarters, then it goes hot, which is the same language the rest of the
+    /// desk uses for "this is fine" and "look at this".
+    struct LoadMeters: View {
+        @Environment(AppModel.self) private var model
+
+        var body: some View {
+            HStack(spacing: 12) {
+                Meter(label: "CPU", value: model.load.cpu)
+                Meter(label: "GPU", value: model.load.gpu)
+            }
+        }
+
+        struct Meter: View {
+            let label: String
+            /// Absent when the machine will not say — drawn dark rather than
+            /// drawn as zero, because zero is a claim and this is a shrug.
+            let value: Double?
+
+            private var colour: Color {
+                guard let value else { return Theme.dead }
+                return value > 0.9 ? Theme.red : value > 0.75 ? Theme.yellow : Theme.orange
+            }
+
+            var body: some View {
+                HStack(spacing: 6) {
+                    Text(label)
+                        .font(Theme.label(10)).tracking(1.1)
+                        .foregroundStyle(Theme.dim)
+
+                    HStack(spacing: 1.5) {
+                        ForEach(0..<12, id: \.self) { cell in
+                            let lit = Double(cell) < (value ?? 0) * 12
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(lit ? colour : Theme.line)
+                                .frame(width: 4, height: 10)
+                        }
+                    }
+
+                    Text(value.map { "\(Int(($0 * 100).rounded()))%" } ?? "—")
+                        .font(Theme.value(11).weight(.semibold))
+                        .foregroundStyle(value == nil ? Theme.dim : Theme.fg)
+                        .frame(width: 38, alignment: .trailing)
+                        .monospacedDigit()
+                }
+                // The whole machine, not this app — which is the number that
+                // decides whether another camera can be plugged in.
+                .help("\(label) load across the whole Mac")
+            }
+        }
     }
 
     struct Stat: View {

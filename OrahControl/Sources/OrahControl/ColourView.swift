@@ -41,7 +41,7 @@ struct ColourView: View {
         VStack(spacing: 0) {
             header
             path
-            if mode == .detail { cameraStrip }
+            cameraStrip
 
             if mode == .all {
                 allCameras
@@ -63,13 +63,9 @@ struct ColourView: View {
     private var header: some View {
         HStack(spacing: 14) {
             Text("COLOUR").font(Theme.label(10)).tracking(2.4).foregroundStyle(Theme.dim)
-            Text(current.map { model.camera(slot: $0)?.name ?? "—" } ?? "no camera")
+            Text(mode == .all ? "all cameras"
+                 : current.map { model.camera(slot: $0)?.name ?? "—" } ?? "no camera")
                 .font(Theme.value(11)).foregroundStyle(Theme.amber)
-            Strip {
-                StripButton(title: "ALL CAMERAS", selected: mode == .all) { mode = .all }
-                StripButton(title: "DETAIL", selected: mode == .detail) { mode = .detail }
-            }
-            .frame(width: 320)
             Spacer()
             Text("\(model.gradedSlots.count) of \(model.cameras.count) graded")
                 .font(Theme.label(9.5)).tracking(1.4).foregroundStyle(Theme.faint)
@@ -111,26 +107,54 @@ struct ColourView: View {
 
     // MARK: - Cameras
 
+    /// One row: **ALL**, then the cameras.
+    ///
+    /// There were two selectors here — a mode switch that said ALL or DETAIL,
+    /// and below it a row of cameras — which is two questions for what is one
+    /// decision. ALL is simply the first key: press it and you get every camera
+    /// side by side, press a name and you get that one in full.
     private var cameraStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
+                Button { mode = .all } label: {
+                    Text("ALL")
+                        .font(Theme.label(11)).tracking(1)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .foregroundStyle(mode == .all ? Color.black : Theme.amberGlow)
+                        .background {
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(mode == .all ? AnyShapeStyle(Theme.amber)
+                                                   : AnyShapeStyle(Theme.keyBody))
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 7)
+                                .stroke(Theme.amber, lineWidth: 1.5)
+                        }
+                }
+                .buttonStyle(.plain)
+
+                Rectangle().fill(Theme.line).frame(width: 1, height: 22)
+                    .padding(.horizontal, 2)
+
                 ForEach(model.cameras) { camera in
                     Button {
                         slot = camera.slot
+                        mode = .detail
                     } label: {
                         HStack(spacing: 5) {
                             Text(camera.name.uppercased())
                                 .font(Theme.label(11)).tracking(1)
                             if model.gradedSlots.contains(camera.slot) {
-                                Circle().fill(current == camera.slot ? Color.black : Theme.amber)
+                                Circle().fill(picked(camera) ? Color.black : Theme.amber)
                                     .frame(width: 5, height: 5)
                             }
                         }
                         .padding(.horizontal, 11).padding(.vertical, 7)
-                        .foregroundStyle(current == camera.slot ? Color.black : Theme.amberGlow)
+                        .foregroundStyle(picked(camera) ? Color.black : Theme.amberGlow)
                         .background {
                             RoundedRectangle(cornerRadius: 7)
-                                .fill(current == camera.slot ? Theme.amber : Theme.keyBody)
+                                .fill(picked(camera) ? AnyShapeStyle(Theme.amber)
+                                                     : AnyShapeStyle(Theme.keyBody))
                         }
                         .overlay {
                             RoundedRectangle(cornerRadius: 7).stroke(
@@ -144,6 +168,10 @@ struct ColourView: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
         }
+    }
+
+    private func picked(_ camera: AppModel.Camera) -> Bool {
+        mode == .detail && current == camera.slot
     }
 
     /// The camera being shaded, all four lenses, live.
@@ -207,16 +235,11 @@ struct ColourView: View {
             }
             .padding(12)
         }
-        // Only the cameras on screen are made pictures of, and only while this
-        // view is up.
-        .onAppear { model.watch(cameras: model.cameras.map(\.slot), bypass: !showsGraded) }
-        .onDisappear { model.watch(cameras: []) }
-        .onChange(of: showsGraded) {
-            model.watch(cameras: model.cameras.map(\.slot), bypass: !showsGraded)
-        }
-        .onChange(of: model.cameras.count) {
-            model.watch(cameras: model.cameras.map(\.slot), bypass: !showsGraded)
-        }
+        // The pictures run whether this view is up or not — the multiview needs
+        // them too. All this panel decides is whether they are shown graded.
+        .onAppear { model.setPictureBypass(!showsGraded) }
+        .onDisappear { model.setPictureBypass(false) }
+        .onChange(of: showsGraded) { model.setPictureBypass(!showsGraded) }
     }
 
     // MARK: - Shading panel
@@ -505,18 +528,21 @@ private struct CameraColumn: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
             title
-            picture
-            lensKeys
-            wheelPicker
-            colourWheel
-            numbers
-            hands
+            VStack(spacing: 8) {
+                picture
+                lensKeys
+                hands
+                wheelPicker
+                colourWheel
+                numbers
+            }
+            .padding(9)
         }
-        .padding(9)
         .frame(width: 268)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
+        .background(Theme.panel)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(camera.slot == model.programSlot ? Theme.program
@@ -525,30 +551,37 @@ private struct CameraColumn: View {
         }
     }
 
+    /// The header runs the full width of the card and carries the tally, the
+    /// way a shading panel does it: each camera is a thing of its own with its
+    /// own title bar, not a column in a table. On air fills the whole bar red,
+    /// which is readable from across a gallery.
     private var title: some View {
-        HStack(spacing: 7) {
+        let onAir = camera.slot == model.programSlot
+        let next = camera.slot == model.previewSlot
+
+        return HStack(spacing: 8) {
             Text(camera.name.uppercased())
-                .font(.system(size: 12, weight: .bold, design: .monospaced)).tracking(1)
+                .font(.system(size: 12.5, weight: .bold, design: .monospaced)).tracking(1)
+                .foregroundStyle(onAir ? .white : next ? Color(hex: 0x04240F) : Theme.amberGlow)
             Spacer()
-            if camera.slot == model.programSlot {
-                badge("ON AIR", Theme.program, .white)
-            } else if camera.slot == model.previewSlot {
-                badge("PREVIEW", Theme.preview, Color(hex: 0x04240F))
+            if onAir {
+                Text("ON AIR")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(1.2)
+                    .foregroundStyle(.white)
+            } else if next {
+                Text("PREVIEW")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(1.2)
+                    .foregroundStyle(Color(hex: 0x04240F))
             }
             if !grade.isNeutral {
-                Circle().fill(Theme.amber).frame(width: 6, height: 6)
+                Circle()
+                    .fill(onAir ? .white : next ? Color(hex: 0x04240F) : Theme.amber)
+                    .frame(width: 6, height: 6)
             }
         }
-        .foregroundStyle(Theme.amberGlow)
-    }
-
-    private func badge(_ text: String, _ bg: Color, _ fg: Color) -> some View {
-        Text(text)
-            .font(.system(size: 8, weight: .bold, design: .monospaced)).tracking(0.8)
-            .foregroundStyle(fg)
-            .padding(.horizontal, 5).padding(.vertical, 2)
-            .background(bg)
-            .clipShape(RoundedRectangle(cornerRadius: 3))
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .frame(maxWidth: .infinity)
+        .background(onAir ? Theme.program : next ? Theme.preview : Theme.raised)
     }
 
     private var picture: some View {
@@ -581,7 +614,7 @@ private struct CameraColumn: View {
                         .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                         .frame(maxWidth: .infinity).padding(.vertical, 4)
                         .foregroundStyle(shown ? Color(hex: 0x141417)
-                                         : lens < camera.lensesArriving ? Theme.amberGlow
+                                         : camera.lensesReady.contains(lens) ? Theme.amberGlow
                                          : Color(hex: 0x6B4D18))
                         .background(RoundedRectangle(cornerRadius: 5)
                             .fill(shown ? AnyShapeStyle(Theme.amberFill)
@@ -686,46 +719,92 @@ private struct CameraColumn: View {
         .clipShape(RoundedRectangle(cornerRadius: 3))
     }
 
-    /// The two controls that do most of the work, small but still dragged.
+    /// The two controls a shader actually keeps a hand on: the lever and the
+    /// pad with the centre point.
+    ///
+    /// They were drawn small, tucked under the numbers, which had them the
+    /// wrong way round — a shading panel gives these the room and lets the
+    /// wheel be the fine work underneath. Big enough to hit without looking,
+    /// and the pad carries a crosshair so neutral is a place you can find by
+    /// eye rather than by reading a figure.
     private var hands: some View {
-        HStack(spacing: 7) {
-            GeometryReader { geometry in
-                let height = geometry.size.height
-                let knob: CGFloat = 22
-                let travel = max(1, height - knob)
-                ZStack(alignment: .top) {
-                    RoundedRectangle(cornerRadius: 6).fill(Theme.raised)
-                        .overlay { RoundedRectangle(cornerRadius: 6)
-                            .stroke(Theme.line, lineWidth: 1) }
-                    Capsule().fill(Theme.amberFill).frame(height: knob)
-                        .offset(y: CGFloat((1 - (grade.exposure + 1) / 2)) * travel)
-                }
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 0).onChanged { value in
-                    let p = min(max(0, (value.location.y - knob / 2) / travel), 1)
-                    edit { $0.exposure = Float((1 - p) * 2 - 1) }
-                })
+        VStack(spacing: 4) {
+            HStack(spacing: 7) {
+                lever
+                pad
             }
-            .frame(width: 34, height: 84)
+            .frame(height: 148)
 
-            GeometryReader { geometry in
-                let size = geometry.size
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6).fill(Theme.raised)
-                        .overlay { RoundedRectangle(cornerRadius: 6)
-                            .stroke(Theme.line, lineWidth: 1) }
-                    Circle().fill(Theme.amberFill).frame(width: 20, height: 20)
-                        .position(x: (0.5 + CGFloat(grade.gamma) * 0.85) * size.width,
-                                  y: (0.5 - CGFloat(grade.black) * 0.85) * size.height)
-                }
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 0).onChanged { value in
-                    let gx = Float(min(max(-1, (value.location.x / size.width - 0.5) / 0.42), 1)) * 0.5
-                    let gy = Float(min(max(-1, (0.5 - value.location.y / size.height) / 0.42), 1)) * 0.5
-                    edit { $0.gamma = gx; $0.black = gy }
-                })
+            HStack(spacing: 7) {
+                Text("EXP").font(Theme.label(8)).tracking(1.2)
+                    .foregroundStyle(Theme.faint).frame(width: 46)
+                Text("GAMMA  ·  BLACK").font(Theme.label(8)).tracking(1.2)
+                    .foregroundStyle(Theme.faint)
+                    .frame(maxWidth: .infinity)
             }
-            .frame(height: 84)
+        }
+    }
+
+    private var lever: some View {
+        GeometryReader { geometry in
+            let height = geometry.size.height
+            let knob: CGFloat = 34
+            let travel = max(1, height - knob)
+            ZStack(alignment: .top) {
+                RoundedRectangle(cornerRadius: 7).fill(Theme.raised)
+                    .overlay { RoundedRectangle(cornerRadius: 7)
+                        .stroke(Theme.line, lineWidth: 1) }
+                // Midpoint mark, so unity exposure is visible on the track.
+                Rectangle().fill(Theme.line).frame(height: 1)
+                    .padding(.horizontal, 6)
+                    .offset(y: height / 2)
+
+                RoundedRectangle(cornerRadius: 6).fill(Theme.amberFill)
+                    .overlay {
+                        VStack(spacing: 3) {
+                            ForEach(0..<3, id: \.self) { _ in
+                                Rectangle().fill(Color.black.opacity(0.28))
+                                    .frame(width: 16, height: 1)
+                            }
+                        }
+                    }
+                    .frame(height: knob)
+                    .offset(y: CGFloat((1 - (grade.exposure + 1) / 2)) * travel)
+            }
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                let p = min(max(0, (value.location.y - knob / 2) / travel), 1)
+                edit { $0.exposure = Float((1 - p) * 2 - 1) }
+            })
+        }
+        .frame(width: 46)
+    }
+
+    private var pad: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+            ZStack {
+                RoundedRectangle(cornerRadius: 7).fill(Theme.raised)
+                    .overlay { RoundedRectangle(cornerRadius: 7)
+                        .stroke(Theme.line, lineWidth: 1) }
+
+                // The centre point: where the camera is left alone.
+                Rectangle().fill(Theme.line).frame(width: 1)
+                Rectangle().fill(Theme.line).frame(height: 1)
+                Circle().stroke(Theme.line, lineWidth: 1).frame(width: 22, height: 22)
+
+                Circle().fill(Theme.amberFill)
+                    .overlay { Circle().stroke(Theme.amberGlow, lineWidth: 1) }
+                    .frame(width: 26, height: 26)
+                    .position(x: (0.5 + CGFloat(grade.gamma) * 0.85) * size.width,
+                              y: (0.5 - CGFloat(grade.black) * 0.85) * size.height)
+            }
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                let gx = Float(min(max(-1, (value.location.x / size.width - 0.5) / 0.42), 1)) * 0.5
+                let gy = Float(min(max(-1, (0.5 - value.location.y / size.height) / 0.42), 1)) * 0.5
+                edit { $0.gamma = gx; $0.black = gy }
+            })
         }
     }
 }

@@ -135,7 +135,12 @@ func connect(host: String, port: Int) async throws -> CameraSession {
 switch command {
 
 case "selftest":
-    let result = ProtoSelfTest.run()
+    var result = ProtoSelfTest.run()
+    // The desk planner's rules run here too: they are the way back from a
+    // change to what gets decoded, and that is where the worst breakages live.
+    let desk = DeskPlanSelfTest.run()
+    result.passed += desk.passed
+    result.failed += desk.failed
     for name in result.passed { print("  ok    \(name)") }
     for failure in result.failed { print("  FAIL  \(failure.name): \(failure.detail)") }
     print("\n\(result.passed.count) passed, \(result.failed.count) failed")

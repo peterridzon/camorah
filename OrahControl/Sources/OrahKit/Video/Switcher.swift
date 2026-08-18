@@ -306,38 +306,11 @@ public final class Switcher: @unchecked Sendable {
             return (programSlot, previewSlot, mix)
         }
 
-        guard let program else { return }
         let tickStart = clock.now
 
         let pts = CMTime(value: outputFrameIndex, timescale: fps)
         outputFrameIndex += 1
 
-        // Encoders are built here, serially, before anything runs in parallel.
-        // Creating them inside the concurrent block meant four threads writing
-        // into the same Swift array at once, which is not safe even at different
-        // indices — it segfaulted.
-        if encoders.contains(where: { $0 == nil }),
-           let sample = lock.withLock({ buffers[program]?[0] })?.current() {
-            let width = Int32(CVPixelBufferGetWidth(sample.pixelBuffer))
-            let height = Int32(CVPixelBufferGetHeight(sample.pixelBuffer))
-            for lens in 0..<4 where encoders[lens] == nil {
-                do {
-                    let encoder = try H264Encoder(settings: .init(
-                        width: width, height: height, fps: fps, bitrate: bitrate))
-                    let sink = outputs[lens]
-                    encoder.onEncoded = { data, _, _ in sink?.write(data) }
-                    encoders[lens] = encoder
-                } catch {
-                    Log.error("switch", "lane \(Self.lenses[lens]) encoder: \(error)")
-                }
-            }
-        }
-
-        // The four lanes are independent and each `encode` call carries a fixed
-        // wait — measured at 43 ms for one lane, but only 57 ms for four, which is
-        // the signature of latency rather than work. Called in sequence that wait
-        // stacks up and drags the pump to a third of its rate; run side by side it
-        // is paid once.
         let monitorTap = onMonitorFrame
         let monitorPicture = monitorTap == nil ? nil : FrameSlot()
 
@@ -352,53 +325,88 @@ public final class Switcher: @unchecked Sendable {
         // two streams arriving, being switched, going out — shows a black
         // rectangle on the desk. So the monitor shows the first lens that has a
         // picture, preferring 0 when it does.
-        let monitorLens = firstLensWithPicture(slot: program) ?? 0
+        let monitorLens = program.flatMap { firstLensWithPicture(slot: $0) } ?? 0
 
-        DispatchQueue.concurrentPerform(iterations: 4) { lens in
-            guard let programFrame = lock.withLock({ buffers[program]?[lens] })?.current() else {
-                return
+        // Encoders are built here, serially, before anything runs in parallel.
+        // Creating them inside the concurrent block meant four threads writing
+        // into the same Swift array at once, which is not safe even at different
+        // indices — it segfaulted.
+        // Everything from here to the taps is the mix, and the mix needs a
+        // programme. It used to be guarded by an early return at the top of the
+        // tick, which took everything *else* down with it: no programme meant no
+        // preview monitor, no multiview, no colour pictures — the desk went
+        // black the moment the programme bus was empty or its camera had not
+        // sent a frame yet. The mix is skipped now; the pictures are not.
+        if let program {
+            if encoders.contains(where: { $0 == nil }),
+               let sample = lock.withLock({ buffers[program]?[0] })?.current() {
+                let width = Int32(CVPixelBufferGetWidth(sample.pixelBuffer))
+                let height = Int32(CVPixelBufferGetHeight(sample.pixelBuffer))
+                for lens in 0..<4 where encoders[lens] == nil {
+                    do {
+                        let encoder = try H264Encoder(settings: .init(
+                            width: width, height: height, fps: fps, bitrate: bitrate))
+                        let sink = outputs[lens]
+                        encoder.onEncoded = { data, _, _ in sink?.write(data) }
+                        encoders[lens] = encoder
+                    } catch {
+                        Log.error("switch", "lane \(Self.lenses[lens]) encoder: \(error)")
+                    }
+                }
             }
-            let previewFrame = preview.flatMap { slot in
-                lock.withLock { buffers[slot]?[lens] }?.current()
-            }
 
-            do {
-                let t1 = clock.now
-                // Grading belongs to the camera, so it happens to each source
-                // before they meet. Doing it after the dissolve would smear one
-                // camera's correction across the other for the length of every
-                // transition.
-                let programGrade = lock.withLock { grades[program] }
-                let previewGrade = preview.flatMap { slot in lock.withLock { grades[slot] } }
-
-                let graded = programGrade.map { g in
-                    (try? graders[lens].grade(programFrame.pixelBuffer, with: g))
-                        ?? programFrame.pixelBuffer
-                } ?? programFrame.pixelBuffer
-
-                let gradedPreview: CVPixelBuffer? = previewFrame.map { frame in
-                    previewGrade.map { g in
-                        (try? graders[lens].grade(frame.pixelBuffer, with: g)) ?? frame.pixelBuffer
-                    } ?? frame.pixelBuffer
+            // The four lanes are independent and each `encode` call carries a fixed
+            // wait — measured at 43 ms for one lane, but only 57 ms for four, which is
+            // the signature of latency rather than work. Called in sequence that wait
+            // stacks up and drags the pump to a third of its rate; run side by side it
+            // is paid once.
+            DispatchQueue.concurrentPerform(iterations: 4) { lens in
+                guard let programFrame = lock.withLock({ buffers[program]?[lens] })?.current() else {
+                    return
+                }
+                let previewFrame = preview.flatMap { slot in
+                    lock.withLock { buffers[slot]?[lens] }?.current()
                 }
 
-                let composed = try compositors[lens].composite(
-                    from: graded,
-                    to: mixNow > 0.0001 ? gradedPreview : nil,
-                    mix: mixNow)
-                if lens == monitorLens { monitorPicture?.set(composed) }
-                outputPictures?[lens].set(composed)
-                let t2 = clock.now
+                do {
+                    let t1 = clock.now
+                    // Grading belongs to the camera, so it happens to each source
+                    // before they meet. Doing it after the dissolve would smear one
+                    // camera's correction across the other for the length of every
+                    // transition.
+                    let programGrade = lock.withLock { grades[program] }
+                    let previewGrade = preview.flatMap { slot in lock.withLock { grades[slot] } }
 
-                try encoders[lens]?.encode(composed, pts: pts)
-                let t3 = clock.now
-                lock.withLock {
-                    timeComposite += seconds(t2 - t1)
-                    timeEncode += seconds(t3 - t2)
+                    let graded = programGrade.map { g in
+                        (try? graders[lens].grade(programFrame.pixelBuffer, with: g))
+                            ?? programFrame.pixelBuffer
+                    } ?? programFrame.pixelBuffer
+
+                    let gradedPreview: CVPixelBuffer? = previewFrame.map { frame in
+                        previewGrade.map { g in
+                            (try? graders[lens].grade(frame.pixelBuffer, with: g)) ?? frame.pixelBuffer
+                        } ?? frame.pixelBuffer
+                    }
+
+                    let composed = try compositors[lens].composite(
+                        from: graded,
+                        to: mixNow > 0.0001 ? gradedPreview : nil,
+                        mix: mixNow)
+                    if lens == monitorLens { monitorPicture?.set(composed) }
+                    outputPictures?[lens].set(composed)
+                    let t2 = clock.now
+
+                    try encoders[lens]?.encode(composed, pts: pts)
+                    let t3 = clock.now
+                    lock.withLock {
+                        timeComposite += seconds(t2 - t1)
+                        timeEncode += seconds(t3 - t2)
+                    }
+                } catch {
+                    Log.warn("switch", "lane \(Self.lenses[lens]): \(error)")
                 }
-            } catch {
-                Log.warn("switch", "lane \(Self.lenses[lens]): \(error)")
             }
+
         }
 
         // The camera under the colour panel, if it is not already one of the
