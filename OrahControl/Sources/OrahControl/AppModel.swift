@@ -316,6 +316,10 @@ final class AppModel {
     /// What each camera is doing right now, in words, during its start sequence.
     private(set) var startStep: [Int: String] = [:]
 
+    /// How many times we have knocked on a camera that never answered, so the
+    /// interval can grow instead of repeating for ever.
+    private var knockCount: [String: Int] = [:]
+
     private var reconnectTasks: [String: Task<Void, Never>] = [:]
     private var reconnectDelay: [String: Int] = [:]
     private var connectedAt: [String: Date] = [:]
@@ -1454,17 +1458,28 @@ final class AppModel {
             guard reconnectTasks[camera.serial] == nil else { continue }
             guard let session = sessions[camera.serial] else { continue }
 
-            // A floor under the rate, independent of how often this is asked.
+            // A floor under the rate, independent of how often this is asked —
+            // and a floor that rises. Ten seconds is right for a camera that has
+            // just been plugged in; it is wrong for one that has refused twenty
+            // times, and knocking on that one all evening is both noise in the
+            // log and traffic at a camera that is trying to boot.
+            let tries = knockCount[camera.serial] ?? 0
+            let floor: TimeInterval = tries < 3 ? 10 : tries < 10 ? 30 : 60
             let last = lastKnock[camera.serial] ?? .distantPast
-            guard Date().timeIntervalSince(last) > 10 else { continue }
+            guard Date().timeIntervalSince(last) > floor else { continue }
             lastKnock[camera.serial] = Date()
+            knockCount[camera.serial] = tries + 1
 
             reconnectTasks[camera.serial] = Task { @MainActor [weak self] in
                 defer { self?.reconnectTasks[camera.serial] = nil }
                 Log.info("cam", "cam\(camera.slot) is on the network with no control session "
                          + "— knocking again")
-                do { try await session.connect() }
-                catch { Log.warn("cam", "cam\(camera.slot) would not take a session: \(error)") }
+                do {
+                    try await session.connect()
+                    self?.knockCount[camera.serial] = 0
+                } catch {
+                    Log.warn("cam", "cam\(camera.slot) would not take a session: \(error)")
+                }
             }
         }
     }
