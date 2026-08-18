@@ -190,6 +190,7 @@ public final class H264StreamReader: @unchecked Sendable {
 public final class CameraSource: @unchecked Sendable {
 
     public let slot: Int
+    private let lock = NSLock()
     private var readers: [Int: H264StreamReader] = [:]
     private var base = ""
     private var fps: Int32 = 30
@@ -200,7 +201,7 @@ public final class CameraSource: @unchecked Sendable {
     }
 
     /// Which lenses this source is currently decoding.
-    public var lenses: [Int] { readers.keys.sorted() }
+    public var lenses: [Int] { lock.withLock { readers.keys.sorted() } }
 
     /// Attaches to `rtmp://host:1935/camNN/` and routes lenses into `switcher`.
     ///
@@ -227,31 +228,52 @@ public final class CameraSource: @unchecked Sendable {
     /// back three seconds later — the exact three seconds in which a cut is
     /// supposed to have happened. The lens that is already decoding keeps
     /// decoding; the other three join it when their first keyframe lands.
+    /// Locked, because this is called off the main thread.
+    ///
+    /// Starting a reader spawns a process and opens an RTMP connection, which
+    /// takes long enough to be seen: doing it on the main thread meant that
+    /// pressing a programme key stalled the interface while three ffmpegs were
+    /// launched. A cut has to happen on the press. So this runs on a background
+    /// queue, and two rapid cuts can therefore be in here at once.
     public func setLenses(_ wanted: [Int]) throws {
         guard let switcher else { return }
         let target = Set(wanted.filter { (0..<4).contains($0) })
 
-        for (index, reader) in readers where !target.contains(index) {
-            reader.stop()
-            readers[index] = nil
+        let (toStop, toStart) = lock.withLock { () -> ([H264StreamReader], [Int]) in
+            let stopping = readers.filter { !target.contains($0.key) }
+            for index in stopping.keys { readers[index] = nil }
+            let starting = target.sorted().filter { readers[$0] == nil }
+            return (Array(stopping.values), starting)
         }
 
-        for index in target.sorted() where readers[index] == nil {
+        toStop.forEach { $0.stop() }
+
+        for index in toStart {
             let reader = H264StreamReader(url: base + Switcher.lenses[index], fps: fps)
             reader.onFrame = { [weak switcher] buffer, pts in
                 switcher?.submit(slot: self.slot, lens: index, frame: buffer, pts: pts)
             }
             try reader.start()
-            readers[index] = reader
+            // Another call may have started this lens while we were spawning.
+            let duplicate = lock.withLock { () -> H264StreamReader? in
+                if readers[index] != nil { return reader }
+                readers[index] = reader
+                return nil
+            }
+            duplicate?.stop()
         }
     }
 
     public func stop() {
-        readers.values.forEach { $0.stop() }
-        readers.removeAll()
+        let running = lock.withLock { () -> [H264StreamReader] in
+            let all = Array(readers.values)
+            readers.removeAll()
+            return all
+        }
+        running.forEach { $0.stop() }
     }
 
     public var framesIn: Int {
-        readers.values.reduce(0) { $0 + $1.framesIn }
+        lock.withLock { readers.values.reduce(0) { $0 + $1.framesIn } }
     }
 }

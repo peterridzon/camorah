@@ -939,6 +939,18 @@ final class AppModel {
     private func syncDesk() {
         guard let switcher else { return }
 
+        // The cut happens first, on the press.
+        //
+        // This used to be the last thing in the function, after the sources had
+        // been sorted out — and sorting out a source spawns ffmpeg and opens an
+        // RTMP connection, on the main thread. So a programme key waited for
+        // three processes to launch before it did the one thing a programme key
+        // is for. What goes to air is a decision, not a resource: it is taken
+        // now, and the decoding catches up behind it.
+        switcher.setProgram(slot: programSlot)
+        switcher.setPreview(slot: previewSlot)
+        switcher.setMix(Float(min(mix, 0.999)))
+
         // A camera counts as available to the desk if its streams are arriving,
         // whoever started them. These cameras resume streaming on their own after
         // a power cut, and they keep streaming when the app quits — so "we did
@@ -984,42 +996,46 @@ final class AppModel {
                 // Lenses are added and removed in place — never by rebuilding
                 // the source, which would black out a picture that is already
                 // running and, if it was going to air, do it in front of
-                // everybody.
+                // everybody. Off the main thread, because starting a reader is
+                // a process launch.
                 if source.lenses != target {
-                    do { try source.setLenses(target) }
-                    catch { Log.warn("desk", "cam\(slot) lenses: \(error)") }
+                    Task.detached(priority: .userInitiated) {
+                        do { try source.setLenses(target) }
+                        catch { Log.warn("desk", "cam\(slot) lenses: \(error)") }
+                    }
                 }
                 continue
             }
             let gone = now.timeIntervalSince(lastReady[slot] ?? .distantPast)
             guard gone > 8 else { continue }
-            source.stop()
             deskSources[slot] = nil
             switcher.removeSource(slot: slot)
             cameraSinkStore[slot]?.push(nil)
+            // Stopping waits for processes to die, which is not the main
+            // thread's business either.
+            Task.detached(priority: .utility) { source.stop() }
             Log.info("desk", "cam\(slot) released")
         }
 
         for (slot, lenses) in wanted where deskSources[slot] == nil {
             let source = CameraSource(slot: slot)
-            do {
-                try source.attach(to: switcher, rtmpBase: rtmpBase(forSlot: slot),
-                                  lenses: lenses)
-                deskSources[slot] = source
-                if let delay = camera(slot: slot)?.delayMilliseconds {
-                    switcher.setDelay(slot: slot, seconds: delay / 1000)
+            deskSources[slot] = source
+            if let delay = camera(slot: slot)?.delayMilliseconds {
+                switcher.setDelay(slot: slot, seconds: delay / 1000)
+            }
+            let base = rtmpBase(forSlot: slot)
+            Task.detached(priority: .userInitiated) {
+                do {
+                    try source.attach(to: switcher, rtmpBase: base, lenses: lenses)
+                } catch {
+                    Log.error("desk", "cam\(slot): \(error)")
+                    let message = "Desk cam\(slot): \(error)"
+                    await MainActor.run { [weak self] in self?.lastError = message }
                 }
-            } catch {
-                lastError = "Desk cam\(slot): \(error)"
-                Log.error("desk", "cam\(slot): \(error)")
             }
         }
 
         refreshPictureTaps()
-
-        switcher.setProgram(slot: programSlot)
-        switcher.setPreview(slot: previewSlot)
-        switcher.setMix(Float(min(mix, 0.999)))
 
         // The four output lanes are only worth running once there is something
         // to send down them.
