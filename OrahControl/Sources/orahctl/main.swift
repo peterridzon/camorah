@@ -150,6 +150,10 @@ case "selftest":
     let fleet = FleetPolicySelfTest.run()
     result.passed += fleet.passed
     result.failed += fleet.failed
+    // What the wall shows, and what a camera's own key says.
+    let wall = WallPolicySelfTest.run()
+    result.passed += wall.passed
+    result.failed += wall.failed
     for name in result.passed { print("  ok    \(name)") }
     for failure in result.failed { print("  FAIL  \(failure.name): \(failure.detail)") }
     print("\n\(result.passed.count) passed, \(result.failed.count) failed")

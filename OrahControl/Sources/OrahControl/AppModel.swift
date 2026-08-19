@@ -2102,6 +2102,25 @@ final class AppModel {
         return positions.first?.state ?? .absent
     }
 
+    /// How a camera stands as far as the wall is concerned — and therefore
+    /// whether it is drawn there at all, and what its own key says.
+    /// See `WallPolicy`.
+    func standing(slot: Int) -> WallPolicy.Standing {
+        guard let camera = camera(slot: slot) else { return .fault }
+        let since = startRequestedAt[slot].map { Date().timeIntervalSince($0) }
+        return WallPolicy.standing(onNetwork: camera.state != .disconnected,
+                                   lockedOut: camera.state == .busy,
+                                   lensesReady: camera.lensesReady.count,
+                                   startRequestedSecondsAgo: since)
+    }
+
+    /// The cameras the multiview draws. A camera with a fault is not one of
+    /// them: it is not a shot, it is a job, and it belongs in the rig check
+    /// where what is wrong with it is written down.
+    var wallCameras: [Camera] {
+        cameras.filter { WallPolicy.belongsOnWall(standing(slot: $0.slot)) }
+    }
+
     /// Pictures are arriving, whoever asked for them.
     func isRunning(slot: Int) -> Bool {
         switch state(slot: slot) {

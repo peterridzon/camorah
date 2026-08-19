@@ -201,12 +201,19 @@ struct MultiviewPane: View {
     }
 
     private var sources: some View {
-        let present = model.buttons.compactMap { $0 }
+        // Only cameras that are a shot, or on their way to being one. A camera
+        // that refused to start, came up with three of its four streams, or is
+        // holding a dead session is not drawn here — it looks exactly like a
+        // camera you could cut to, and it is not. The rig check has it, with
+        // what is wrong written on it.
+        let wall = Set(model.wallCameras.map(\.slot))
+        let present = model.buttons.compactMap { $0 }.filter { wall.contains($0.slot) }
         let columns = Array(repeating: GridItem(.flexible(), spacing: 5), count: layout.columns)
 
         return Group {
             if present.isEmpty {
-                Text("NO CAMERAS ON THE NETWORK")
+                Text(model.cameras.isEmpty ? "NO CAMERAS ON THE NETWORK"
+                                           : "NO CAMERA IS READY — SEE RIG CHECK")
                     .font(Theme.label(10)).tracking(2).foregroundStyle(Theme.faint)
                     .frame(maxWidth: .infinity).padding(.vertical, 28)
             } else {
@@ -510,27 +517,37 @@ private struct SourceTile: View {
     /// because a button is an instruction, not a status light — the status is
     /// already written across the tile above it.
     private func startKey(_ camera: AppModel.Camera) -> some View {
-        let running = model.isRunning(slot: camera.slot)
+        // What the key says follows what the camera is doing, not what it was
+        // doing when it was last asked. It used to read START through the whole
+        // twenty seconds of a camera coming up — a key that is plainly lying to
+        // the hand about to press it again.
+        let key = WallPolicy.key(for: model.standing(slot: camera.slot))
+        let running = key == .stop
         return Button {
             if running { model.stopCamera(camera.slot) }
-            else { model.startCamera(camera.slot) }
+            else if key == .start { model.startCamera(camera.slot) }
         } label: {
-            Text(running ? "STOP" : "START")
+            Text(key == .stop ? "STOP" : key == .starting ? "STARTING" : "START")
                 .font(.system(size: 7, weight: .bold, design: .monospaced))
                 .tracking(0.6)
                 .padding(.horizontal, 4).padding(.vertical, 2)
-                .foregroundStyle(running ? Theme.program : Color(hex: 0x141417))
+                .foregroundStyle(running ? Theme.program
+                                 : key == .starting ? Theme.amberGlow : Color(hex: 0x141417))
                 .background(RoundedRectangle(cornerRadius: 3)
-                    .fill(running ? AnyShapeStyle(Color.black.opacity(0.8))
-                                  : AnyShapeStyle(Theme.amberFill)))
+                    .fill(key == .start ? AnyShapeStyle(Theme.amberFill)
+                                        : AnyShapeStyle(Color.black.opacity(0.8))))
                 .overlay {
                     RoundedRectangle(cornerRadius: 3)
-                        .stroke(running ? Theme.program.opacity(0.8) : Theme.amberGlow,
+                        .stroke(running ? Theme.program.opacity(0.8)
+                                : key == .starting ? Theme.amber.opacity(0.6) : Theme.amberGlow,
                                 lineWidth: 1)
                 }
         }
         .buttonStyle(.plain)
-        .help(running ? "Stop cam \(camera.slot)" : "Start cam \(camera.slot)")
+        .disabled(key == .starting)
+        .help(running ? "Stop cam \(camera.slot)"
+              : key == .starting ? "Cam \(camera.slot) is coming up"
+              : "Start cam \(camera.slot)")
     }
 
     /// One of the four lenses. Lit is the one being shown; a lens that has not
