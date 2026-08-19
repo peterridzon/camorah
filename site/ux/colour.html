@@ -45,6 +45,17 @@
      One card per camera, the way a shading panel does it: each is a thing of
      its own with its own title bar, not a column in a table. On air fills the
      whole bar, which is readable from across a gallery. */
+  /* In the app these are two states of one key: ALL, or a camera. Both are laid
+     out here, because a design page that hides half of itself behind a click is
+     a design page nobody sees half of. */
+  .sechead{display:flex;align-items:baseline;gap:10px;margin:18px 0 9px;
+           padding-left:2px;border-left:3px solid var(--line);padding-left:9px}
+  .sechead.on{border-left-color:var(--amber)}
+  .sechead b{font:700 11px/1 var(--mono);letter-spacing:.18em;color:var(--dim)}
+  .sechead.on b{color:var(--amber)}
+  .sechead span{font-size:12.5px;color:var(--faint)}
+  .sechead i{font-style:normal;color:var(--amberGlow)}
+
   .wall{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px}
   .cc{flex:0 0 250px;background:var(--panel);border:1.5px solid var(--line);
       border-radius:10px;overflow:hidden}
@@ -86,6 +97,29 @@
   .cccap{display:flex;gap:7px;font:700 8px/1 var(--mono);letter-spacing:.12em;
          color:var(--faint)}
   .cccap i{width:44px;font-style:normal} .cccap b{flex:1;text-align:center;font-weight:700}
+
+  /* The wheel belongs on the card. A card without one is a card that can move
+     exposure and nothing else — which is not colour correction, it is a fader. */
+  .ccpick{display:flex;gap:3px;padding:2px;border-radius:6px;background:var(--bg)}
+  .ccpick button{flex:1;padding:4px 0;border:0;border-radius:5px;background:transparent;
+                 color:var(--dim);font:600 10px/1 -apple-system,sans-serif;cursor:pointer}
+  .ccpick button.on{background:#232327;color:var(--amber)}
+  .ccwheel{position:relative;width:100%;aspect-ratio:1;border-radius:50%;cursor:crosshair;
+      background:conic-gradient(from 90deg,#e05a5a,#e0c65a,#5ae05a,#5ae0d6,#5a7ae0,#c95ae0,#e05a5a)}
+  .ccwheel::after{content:"";position:absolute;inset:15%;border-radius:50%;
+                  background:var(--panel);border:1px solid var(--line)}
+  .ccwheel .cross{position:absolute;inset:15%;pointer-events:none}
+  .ccwheel .dot{position:absolute;width:11px;height:11px;border-radius:50%;background:#f2f2f4;
+      transform:translate(-50%,-50%);box-shadow:0 1px 5px #000;pointer-events:none;z-index:2}
+  .ccnums{display:grid;grid-template-columns:repeat(4,1fr) 26px;gap:3px}
+  .ccnums input{min-width:0;width:100%;background:#000;border:1px solid #303036;
+      border-radius:3px;color:var(--fg);font:600 10px/1 var(--mono);text-align:center;
+      padding:4px 0}
+  .ccnums input.r{border-bottom:2px solid #e05a5a}
+  .ccnums input.g{border-bottom:2px solid #5ae05a}
+  .ccnums input.b{border-bottom:2px solid #5a7ae0}
+  .ccnums button{background:#232327;border:1px solid var(--line);border-radius:3px;
+                 color:var(--dim);cursor:pointer;font-size:11px}
   .camtab i{position:absolute;right:5px;bottom:4px;width:6px;height:6px;border-radius:50%;
        background:var(--amber);box-shadow:0 0 6px var(--amber)}
   .camtab.sel i{background:#141417;box-shadow:none}
@@ -96,7 +130,22 @@
   .iconbtn.hot{color:#141417;background:linear-gradient(178deg,#ffd88a,var(--amber));
                border-color:#4d3208;font-weight:700}
 
+  .detail{display:flex;flex-direction:column;gap:12px}
+  /* Both columns open with a label of the same height, which is what puts the
+     lever and the wheels on one line. They used to start at different heights —
+     the wheels level with the picture, the lever a long way below it — so the
+     two halves of one panel read as two unrelated things. */
   .stage{display:grid;grid-template-columns:296px 1fr;gap:12px;align-items:start}
+  .pics{padding:11px}
+  .picHead{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+  .picHead .tag{position:static;font:700 8.5px/1 var(--mono);letter-spacing:.1em;
+                padding:3px 6px;border-radius:2px}
+  .picHead .ab{margin:0;width:190px}
+  .lensrow{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .lensrow .shot{aspect-ratio:3/4}
+  .lensrow .shot .num{position:absolute;left:5px;bottom:5px;font:700 8.5px/1 var(--mono);
+       color:var(--amberGlow);background:rgba(0,0,0,.72);padding:3px 5px;border-radius:2px}
+  @media(max-width:760px){ .lensrow{grid-template-columns:repeat(2,1fr)} }
 
   /* ---------- RCP column ----------
      A shading panel is not a set of sliders. Two controls carry almost all of
@@ -234,17 +283,36 @@
 
   <div class="top" id="tabs"></div>
 
+  <div class="sechead on" id="allHead">
+    <b>ALL</b><span>every camera at once — picture, lens keys, lever, wheel</span>
+  </div>
   <div class="wall" id="wall"></div>
 
-  <div class="stage" id="stage">
+  <div class="sechead" id="oneHead">
+    <b>ONE CAMERA</b><span>the same controls, at the size a hand wants — <i id="oneName"></i></span>
+  </div>
+
+  <div class="detail" id="stage">
+    <!-- The picture is what the eye is on while the hand works, so it sits over
+         the controls rather than beside one of them. All four lenses, because a
+         camera is four sensors and a correction that fixes the front can wreck
+         the one facing the lights. -->
+    <div class="panel pics">
+      <div class="picHead">
+        <span class="lbl">Preview — all four lenses</span>
+        <span class="tag" id="shotTag"></span>
+        <span class="spacer"></span>
+        <div class="ab">
+          <button id="abBypass" onclick="setAB(false)">BYPASS</button>
+          <button id="abGraded" class="sel" onclick="setAB(true)">GRADED</button>
+        </div>
+      </div>
+      <div class="lensrow" id="lensrow"></div>
+    </div>
+
+    <div class="stage">
     <div class="panel rcp">
       <div class="lbl" style="margin-bottom:8px">Shading</div>
-      <div class="shot" id="shot"><div class="sky"></div><span class="tag" id="shotTag"></span></div>
-
-      <div class="ab">
-        <button id="abBypass" onclick="setAB(false)">BYPASS</button>
-        <button id="abGraded" class="sel" onclick="setAB(true)">GRADED</button>
-      </div>
 
       <div class="hand">
         <div class="lever">
@@ -266,6 +334,7 @@
     </div>
 
     <div class="panel">
+      <div class="lbl" style="padding:12px 12px 0">Trim</div>
       <div class="wheels" id="wheels"></div>
       <div class="sliders" id="sliders"></div>
       <div class="foot">
@@ -275,6 +344,7 @@
         <span class="spacer"></span>
         <span class="warn" id="warn"></span>
       </div>
+    </div>
     </div>
   </div>
 </div>
@@ -385,20 +455,39 @@ function drawSliders(){
   ).join("");
 }
 
+const LENSNAMES = ["0_0","0_1","1_0","1_1"];
+
 function drawShot(){
-  const el = $("#shot");
-  el.className = "shot " + (cam===PGM ? "pgm" : cam===PVW ? "pvw" : "");
-  $("#shotTag").textContent = cam===PGM ? "ON AIR" : cam===PVW ? "PREVIEW" : NAMES[cam];
-  const s = S(), sky = el.querySelector(".sky");
-  if(!showGraded){ sky.style.filter = ""; return; }
+  const row = $("#lensrow");
+  const cls = "shot " + (cam===PGM ? "pgm" : cam===PVW ? "pvw" : "");
+  if(row.children.length !== 4){
+    row.innerHTML = LENSNAMES.map(n =>
+      `<div class="${cls}"><div class="sky"></div><span class="num">${n}</span></div>`).join("");
+  }
+  [...row.children].forEach(el => el.className = cls);
+
+  const tag = $("#shotTag");
+  tag.textContent = cam===PGM ? "ON AIR" : cam===PVW ? "PREVIEW" : NAMES[cam];
+  tag.style.background = cam===PGM ? "var(--prog)" : cam===PVW ? "var(--prev)" : "#232327";
+  tag.style.color = cam===PGM ? "#fff" : cam===PVW ? "#04240f" : "var(--amberGlow)";
+
+  const s = S();
+  const skies = [...row.querySelectorAll(".sky")];
+  if(!showGraded){ skies.forEach(k => k.style.filter = ""); return; }
   // Indicative only. The real picture is computed in Metal, in the same pass
   // that already runs the dissolve.
   const bright = 1 + s.exposure * .55 + s.gam * .35 + s.gamma.y + s.lift.y * .5;
   const sat = s.saturation / 50;
   const con = .5 + s.contrast / 100 - s.black * .4;
   const rot = (s.hue - 180) * .12 + (s.gain.r - s.gain.b) * 40;
-  sky.style.filter = `brightness(${Math.max(.15,bright).toFixed(3)}) saturate(${sat.toFixed(2)})
+  const filter = `brightness(${Math.max(.15,bright).toFixed(3)}) saturate(${sat.toFixed(2)})
      contrast(${con.toFixed(2)}) hue-rotate(${rot.toFixed(1)}deg)`;
+  // Each lens is lit differently; the same grade lands differently on each.
+  skies.forEach((k,i) => {
+    k.style.filter = filter;
+    k.style.opacity = 1;
+    k.style.transform = `scale(${1 + i*0.04}) rotate(${i*0.4}deg)`;
+  });
 }
 
 function setNum(w,k,v){ S()[w][k] = parseFloat(v) || 0; draw(); }
@@ -474,16 +563,18 @@ function savePreset(){
 }
 
 function drawWall(){
-  const wall = $("#wall"), stage = $("#stage");
-  wall.style.display  = mode === 'all' ? "flex" : "none";
-  stage.style.display = mode === 'all' ? "none" : "";
-  if(mode !== 'all') return;
-
+  const wall = $("#wall");
+  $("#allHead").className = mode === 'all' ? "sechead on" : "sechead";
+  $("#oneHead").className = mode === 'all' ? "sechead" : "sechead on";
+  $("#oneName").textContent = NAMES[cam];
   wall.innerHTML = REAL.map(c=>{
     const v = state[c];
     const role = c===PGM ? "pgm" : c===PVW ? "pvw" : "";
     const tag  = c===PGM ? "ON AIR" : c===PVW ? "PREVIEW" : "";
     const lens = lensOf[c] || 0;
+    const w = wheelDef(c), t = v[w.k], span = w.max - w.min;
+    const wx = 50 + ((t.r - t.b) / span) * 90;
+    const wy = 50 - ((t.g - w.base) / span) * 90;
     return `<div class="cc ${role}">
       <h4>${NAMES[c].toUpperCase()}<span>${tag}</span>${touched(c)?"<i></i>":""}</h4>
       <div class="ccbody">
@@ -497,19 +588,63 @@ function drawWall(){
             <b style="left:${50+v.gam*42}%;top:${50-v.black*42}%"></b></div>
         </div>
         <div class="cccap"><i>EXP</i><b>GAMMA · BLACK</b></div>
+
+        <div class="ccpick">${WHEELS.map(w=>
+          `<button class="${w.k===wheelOf(c)?'on':''}"
+             onclick="wheelSel[${c}]='${w.k}';drawWall()">${w.n}</button>`).join("")}</div>
+
+        <div class="ccwheel" onmousedown="grabCard(event,${c})">
+          <div class="cross"></div>
+          <div class="dot" style="left:${wx}%;top:${wy}%"></div>
+        </div>
+
+        <div class="ccnums">
+          ${["y","r","g","b"].map(k=>
+            `<input class="${k}" value="${t[k].toFixed(2)}"
+               onchange="setCard(${c},'${k}',this.value)">`).join("")}
+          <button onclick="resetCard(${c})" title="Reset">↺</button>
+        </div>
       </div>
     </div>`;
   }).join("");
 }
-const lensOf = {};
+const lensOf = {}, wheelSel = {};
+const wheelOf = c => wheelSel[c] || "lift";
+const wheelDef = c => WHEELS.find(w => w.k === wheelOf(c));
+
+/* The card's wheel drags exactly as the big one does — same arithmetic, so the
+   design cannot promise a control that behaves differently in the two places. */
+function grabCard(e,c){
+  const el = e.currentTarget, w = wheelDef(c), span = w.max - w.min;
+  const move = ev => {
+    const r = el.getBoundingClientRect();
+    const dx = (ev.clientX - r.left - r.width/2) / (r.width/2);
+    const dy = (ev.clientY - r.top - r.height/2) / (r.height/2);
+    const t = state[c][w.k];
+    t.r = +(w.base + ( dx*.5 - dy*.5) * span/2).toFixed(3);
+    t.b = +(w.base + (-dx*.5 - dy*.5) * span/2).toFixed(3);
+    t.g = +(w.base + (-dy*.5) * span/2).toFixed(3);
+    draw();
+  };
+  move(e);
+  const up = () => { removeEventListener("mousemove",move); removeEventListener("mouseup",up); };
+  addEventListener("mousemove",move); addEventListener("mouseup",up);
+}
+function setCard(c,k,val){
+  const v = parseFloat(val); if(isNaN(v)) return;
+  state[c][wheelOf(c)][k] = v; draw();
+}
+function resetCard(c){
+  const w = wheelDef(c);
+  state[c][w.k] = {r:w.base,g:w.base,b:w.base,y:w.base}; draw();
+}
 
 function draw(){
   drawTabs(); drawWall();
-  if(mode === 'all') return;
   drawWheels(); drawSliders(); drawShot(); drawLever(); drawPad();
 }
 draw();
-addEventListener("resize", () => { if(mode !== 'all'){ drawLever(); drawPad(); } });
+addEventListener("resize", () => { drawLever(); drawPad(); });
 </script>
 
 <script>
