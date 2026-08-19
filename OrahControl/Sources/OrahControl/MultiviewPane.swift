@@ -520,9 +520,14 @@ private struct SourceTile: View {
                 }
 
                 if isFault {
-                    // Said plainly, on the screen that is being watched. What is
-                    // actually wrong is written across the middle of the tile by
-                    // the status; this is the mark that carries across a room.
+                    // Dropped out: the tile darkens, the way a dead source does
+                    // on a wall. Legible from across a gallery without borrowing
+                    // a colour that means something else.
+                    Rectangle().fill(Color.black.opacity(0.45))
+                        .allowsHitTesting(false)
+
+                    // What is actually wrong is written across the middle of the
+                    // tile by the status; this is the mark that carries.
                     Text("FAULT")
                         .font(.system(size: 7.5, weight: .bold, design: .monospaced))
                         .tracking(0.8)
@@ -562,9 +567,12 @@ private struct SourceTile: View {
         .aspectRatio(3.0/4.0, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 4))
         .overlay {
+            // The border is the tally and nothing else. Red is on air, green is
+            // next — a third meaning for a border on the screen an operator
+            // reads at a glance is how somebody cuts to the wrong camera. A
+            // fault says so with its badge and by going dim.
             RoundedRectangle(cornerRadius: 4)
                 .stroke(isProgram ? Theme.program : isPreview ? Theme.preview
-                        : isFault ? Theme.red.opacity(0.9)
                         : Color(hex: 0x1E1E22), lineWidth: 2)
         }
         .onTapGesture { model.selectPreview(camera.slot) }
