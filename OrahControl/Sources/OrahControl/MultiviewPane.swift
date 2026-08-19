@@ -228,8 +228,52 @@ struct MultiviewPane: View {
 
     // MARK: - Rail
 
+    /// Where the wall's pictures are made.
+    ///
+    /// Twenty-four full-size decodes is a real load on the machine that is also
+    /// running the mix. The nodes are otherwise only writing files and each
+    /// already holds its own cameras' pictures, so on a big rig the work is
+    /// better spent there — and on a small one it is not worth the second of
+    /// delay a transcode adds. Hence a key, not a decision taken in the source.
+    private func sourceKey(_ title: String, _ mode: SourceRouting.Mode) -> some View {
+        let on = model.previewSource == mode
+        return Button { model.previewSource = mode } label: {
+            Text(title)
+                .font(Theme.label(10)).tracking(1.2)
+                .frame(maxWidth: .infinity).padding(.vertical, 6)
+                .foregroundStyle(on ? Color(hex: 0x141417) : Theme.dim)
+                .background(RoundedRectangle(cornerRadius: 6)
+                    .fill(on ? AnyShapeStyle(Theme.amberFill) : AnyShapeStyle(Theme.raised)))
+                .overlay { RoundedRectangle(cornerRadius: 6)
+                    .stroke(on ? Theme.amberGlow : Theme.line, lineWidth: 1) }
+        }
+        .buttonStyle(.plain)
+    }
+
     private var rail: some View {
         VStack(alignment: .leading, spacing: 10) {
+            railSection("PREVIEW SOURCE") {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 5) {
+                        sourceKey("THIS MAC", .mac)
+                        sourceKey("NODES", .node)
+                    }
+                    Text(model.previewSource == .node
+                         ? "Tiles are the nodes' 480×270 proxies. Programme and preview "
+                           + "still come whole — focus cannot be judged on a proxy."
+                         : "Every tile is a full stream decoded here. Instant and exact, "
+                           + "one hardware decode per camera.")
+                        .font(Theme.value(10)).foregroundStyle(Theme.faint)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if model.previewSource == .node, model.nodesOnline == 0 {
+                        Text("NO NODE IS ANSWERING — TILES FELL BACK TO THIS MAC")
+                            .font(Theme.label(9)).tracking(1.1)
+                            .foregroundStyle(Theme.yellow)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
             railSection("BOXES") {
                 VStack(spacing: 6) {
                     boxRowEntry(1, key: "PVW", tint: Theme.preview,

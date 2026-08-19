@@ -878,6 +878,56 @@ final class AppModel {
         return String(format: "rtmp://%@:%d/cam%02d/", host, configuration.rtmpPort, slot)
     }
 
+    /// Where to read a camera, and which paths under it. See `SourceRouting`.
+    private func source(forSlot slot: Int, lenses: [Int]) -> SourceRouting.Source {
+        let onDesk = slot == programSlot || slot == previewSlot
+        let host = nodeHost(forSlot: slot)
+        return SourceRouting.source(
+            slot: slot,
+            role: onDesk ? .desk : .thumbnail,
+            mode: previewSource,
+            lenses: lenses,
+            tileLens: lens(for: slot),
+            nodeHost: host,
+            nodeOnline: nodes.first { $0.host == host }?.online ?? false,
+            fallbackHost: NetworkInterface.primaryIPv4() ?? "127.0.0.1",
+            port: configuration.rtmpPort)
+    }
+
+    /// Where the wall's pictures come from.
+    ///
+    /// Twenty-four full-size decodes is a real load on the machine that is also
+    /// running the mix; the nodes are otherwise only writing files, and each
+    /// already has the pictures of its own cameras. Switching does not touch
+    /// programme or preview — those are never proxied.
+    var previewSource: SourceRouting.Mode {
+        get { configuration.previewSource }
+        set {
+            guard newValue != configuration.previewSource else { return }
+            ConfigStore.shared.mutate { $0.previewSource = newValue }
+            configuration.previewSource = newValue
+            Log.info("desk", "wall pictures come from \(newValue == .node ? "the nodes" : "this Mac")")
+
+            // Tell the nodes to start or stop their transcodes. A node that is
+            // not asked does no proxy work at all — that is the whole saving.
+            for node in nodes where node.online {
+                post("http://\(node.host):8000/proxy/"
+                     + (SourceRouting.nodeShouldTranscode(mode: newValue) ? "start" : "stop"))
+            }
+
+            // Every thumbnail is now read from somewhere else, so their sources
+            // are rebuilt. The desk pair is untouched, which is what keeps the
+            // programme on air across the switch.
+            for (slot, source) in deskSources where slot != programSlot && slot != previewSlot {
+                deskSources[slot] = nil
+                switcher?.removeSource(slot: slot)
+                cameraSinkStore[slot]?.push(nil)
+                Task.detached(priority: .utility) { source.stop() }
+            }
+            syncDesk()
+        }
+    }
+
     func stopCamera(_ slot: Int) {
         guard let camera = cameras.first(where: { $0.slot == slot }),
               let session = sessions[camera.serial] else { return }
@@ -992,15 +1042,16 @@ final class AppModel {
         for slot in wanted.keys { lastReady[slot] = now }
 
         for (slot, source) in deskSources {
-            if let target = wanted[slot]?.sorted() {
+            if let lenses = wanted[slot]?.sorted() {
+                let target = self.source(forSlot: slot, lenses: lenses).streams
                 // Lenses are added and removed in place — never by rebuilding
                 // the source, which would black out a picture that is already
                 // running and, if it was going to air, do it in front of
                 // everybody. Off the main thread, because starting a reader is
                 // a process launch.
-                if source.lenses != target {
+                if source.streams != target {
                     Task.detached(priority: .userInitiated) {
-                        do { try source.setLenses(target) }
+                        do { try source.setStreams(target) }
                         catch { Log.warn("desk", "cam\(slot) lenses: \(error)") }
                     }
                 }
@@ -1023,10 +1074,11 @@ final class AppModel {
             if let delay = camera(slot: slot)?.delayMilliseconds {
                 switcher.setDelay(slot: slot, seconds: delay / 1000)
             }
-            let base = rtmpBase(forSlot: slot)
+            let route = self.source(forSlot: slot, lenses: lenses)
             Task.detached(priority: .userInitiated) {
                 do {
-                    try source.attach(to: switcher, rtmpBase: base, lenses: lenses)
+                    try source.attach(to: switcher, rtmpBase: route.base,
+                                      streams: route.streams)
                 } catch {
                     Log.error("desk", "cam\(slot): \(error)")
                     let message = "Desk cam\(slot): \(error)"
@@ -1224,10 +1276,14 @@ final class AppModel {
         }
     }
 
-    private func post(_ urlString: String) {
+    private func post(_ urlString: String, body: [String: String]? = nil) {
         guard let url = URL(string: urlString) else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        }
         Task { _ = try? await URLSession.shared.data(for: request) }
     }
 
@@ -1693,7 +1749,23 @@ final class AppModel {
     func lens(for slot: Int) -> Int { tileLens[slot] ?? 0 }
 
     func setLens(_ lens: Int, for slot: Int) {
-        tileLens[slot] = max(0, min(3, lens))
+        let wanted = max(0, min(3, lens))
+        tileLens[slot] = wanted
+
+        // On the nodes there is one proxy per camera and the node decides which
+        // lens goes into it — so this is a request to that node, and it changes
+        // the lens for every camera that node owns. That is the price of the
+        // cheap wall, and it is worth saying out loud rather than leaving an
+        // operator to discover that one key moved four tiles.
+        if previewSource == .node, slot != programSlot, slot != previewSlot,
+           let host = nodeHost(forSlot: slot),
+           nodes.contains(where: { $0.host == host && $0.online }) {
+            post("http://\(host):8000/proxy/lens", body: ["lens": Switcher.lenses[wanted]])
+            for other in nodes.first(where: { $0.host == host })?.cameras ?? [] {
+                tileLens[other] = wanted
+            }
+        }
+
         // A thumbnail decodes only the lens it is showing, so asking for another
         // one is a change to what is decoded, not just to what is drawn.
         syncDesk()

@@ -83,7 +83,16 @@ camera, holding one reader per lens.
    that happens is the moment somebody presses a programme key.
 4. Built on evidence, torn down on sustained absence: eight seconds of nothing,
    not one poll.
-5. Cost is explicit. Programme and preview decode every lens because the mix
+5. **Where a picture is read from is a switch, not a decision in the source.**
+   On the Mac every thumbnail is a full stream decoded here — instant, exact,
+   one hardware decode per camera. On the nodes each machine transcodes its own
+   cameras to 480×270 at ten frames and the Mac decodes those instead. Six
+   cameras do not need the nodes; twenty-four probably do, and the machine
+   running the mix is the wrong one to find that out on. Programme and preview
+   are never proxied: focus cannot be judged on a 480-pixel picture. A node that
+   is not answering falls back to the camera, because a picture at full cost
+   beats an empty wall.
+6. Cost is explicit. Programme and preview decode every lens because the mix
    sends four lanes out. Every other camera decodes exactly one — the lens its
    tile is set to, or the first one that exists if that half of the camera never
    came up. Twenty-four thumbnails is twenty-four decodes, not ninety-six.

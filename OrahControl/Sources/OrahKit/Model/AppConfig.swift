@@ -116,6 +116,11 @@ public struct AppConfig: Codable, Sendable, Equatable {
 
     // MARK: - Behaviour
 
+    /// Where the multiview's pictures come from: this Mac, or the nodes'
+    /// proxies. See `SourceRouting` — it is a switch because neither answer is
+    /// right at both six cameras and twenty-four.
+    public var previewSource: SourceRouting.Mode = .mac
+
     /// Start recording automatically as soon as a camera begins streaming.
     public var autoStartRecording: Bool = false
 

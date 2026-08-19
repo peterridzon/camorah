@@ -192,6 +192,9 @@ public final class CameraSource: @unchecked Sendable {
     public let slot: Int
     private let lock = NSLock()
     private var readers: [Int: H264StreamReader] = [:]
+    /// Which path each lens is being read from — a lens can be the camera's own
+    /// stream one moment and a node's proxy the next.
+    private var paths: [Int: String] = [:]
     private var base = ""
     private var fps: Int32 = 30
     private weak var switcher: Switcher?
@@ -203,6 +206,13 @@ public final class CameraSource: @unchecked Sendable {
     /// Which lenses this source is currently decoding.
     public var lenses: [Int] { lock.withLock { readers.keys.sorted() } }
 
+    /// What it is reading, in full — the pair matters, because a proxy is one
+    /// path standing in for a lens.
+    public var streams: [SourceRouting.Stream] {
+        lock.withLock { paths.map { SourceRouting.Stream(lens: $0.key, path: $0.value) } }
+            .sorted { $0.lens < $1.lens }
+    }
+
     /// Attaches to `rtmp://host:1935/camNN/` and routes lenses into `switcher`.
     ///
     /// Not always all four. A camera on the desk needs every lens, because the
@@ -210,13 +220,18 @@ public final class CameraSource: @unchecked Sendable {
     /// lens somebody is looking at — decoding the other three to throw them away
     /// is three hardware decodes per camera, and with two dozen cameras that is
     /// the difference between a multiview and a slideshow.
+    /// Every lens of the camera, read from its own streams.
+    public static let everyLens = (0..<4).map {
+        SourceRouting.Stream(lens: $0, path: Switcher.lenses[$0])
+    }
+
     public func attach(to switcher: Switcher, rtmpBase: String, fps: Int32 = 30,
-                       lenses: [Int] = [0, 1, 2, 3]) throws {
+                       streams: [SourceRouting.Stream] = CameraSource.everyLens) throws {
         self.base = rtmpBase.hasSuffix("/") ? rtmpBase : rtmpBase + "/"
         self.fps = fps
         self.switcher = switcher
         switcher.addSource(slot: slot)
-        try setLenses(lenses)
+        try setStreams(streams)
         Log.info("switch", "camera \(slot) attached from \(base)")
     }
 
@@ -235,21 +250,25 @@ public final class CameraSource: @unchecked Sendable {
     /// pressing a programme key stalled the interface while three ffmpegs were
     /// launched. A cut has to happen on the press. So this runs on a background
     /// queue, and two rapid cuts can therefore be in here at once.
-    public func setLenses(_ wanted: [Int]) throws {
+    public func setStreams(_ wanted: [SourceRouting.Stream]) throws {
         guard let switcher else { return }
-        let target = Set(wanted.filter { (0..<4).contains($0) })
+        var target: [Int: String] = [:]
+        for stream in wanted where (0..<4).contains(stream.lens) {
+            target[stream.lens] = stream.path
+        }
 
         let (toStop, toStart) = lock.withLock { () -> ([H264StreamReader], [Int]) in
-            let stopping = readers.filter { !target.contains($0.key) }
-            for index in stopping.keys { readers[index] = nil }
-            let starting = target.sorted().filter { readers[$0] == nil }
+            let stopping = readers.filter { paths[$0.key] != target[$0.key] }
+            for index in stopping.keys { readers[index] = nil; paths[index] = nil }
+            let starting = target.keys.sorted().filter { readers[$0] == nil }
             return (Array(stopping.values), starting)
         }
 
         toStop.forEach { $0.stop() }
 
         for index in toStart {
-            let reader = H264StreamReader(url: base + Switcher.lenses[index], fps: fps)
+            let path = target[index] ?? Switcher.lenses[index]
+            let reader = H264StreamReader(url: base + path, fps: fps)
             reader.onFrame = { [weak switcher] buffer, pts in
                 switcher?.submit(slot: self.slot, lens: index, frame: buffer, pts: pts)
             }
@@ -258,6 +277,7 @@ public final class CameraSource: @unchecked Sendable {
             let duplicate = lock.withLock { () -> H264StreamReader? in
                 if readers[index] != nil { return reader }
                 readers[index] = reader
+                paths[index] = target[index]
                 return nil
             }
             duplicate?.stop()
@@ -268,6 +288,7 @@ public final class CameraSource: @unchecked Sendable {
         let running = lock.withLock { () -> [H264StreamReader] in
             let all = Array(readers.values)
             readers.removeAll()
+            paths.removeAll()
             return all
         }
         running.forEach { $0.stop() }

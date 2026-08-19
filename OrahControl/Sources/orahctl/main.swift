@@ -154,6 +154,10 @@ case "selftest":
     let wall = WallPolicySelfTest.run()
     result.passed += wall.passed
     result.failed += wall.failed
+    // Where each picture is read from — this Mac, or a node's proxy.
+    let routing = SourceRoutingSelfTest.run()
+    result.passed += routing.passed
+    result.failed += routing.failed
     for name in result.passed { print("  ok    \(name)") }
     for failure in result.failed { print("  FAIL  \(failure.name): \(failure.detail)") }
     print("\n\(result.passed.count) passed, \(result.failed.count) failed")
