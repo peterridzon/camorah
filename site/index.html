@@ -119,6 +119,7 @@
   <a href="#desk">The desk</a>
   <a href="#philosophy">Philosophy</a>
   <a href="#architecture">Architecture</a>
+  <a href="#core">The core</a>
   <a href="#multiview">Multiview</a>
   <a href="#colour">Colour</a>
   <a href="#rig">Rig check</a>
@@ -287,7 +288,7 @@
     <span class="node">node · MediaMTX</span><span class="arr">→</span>
     <span class="node iso">RECORD · ISO, stream copy</span>
     <span style="width:20px"></span>
-    <span class="node">proxy</span><span class="arr">→</span>
+    <span class="node">one lens per camera</span><span class="arr">→</span>
     <span class="node">Mac · VideoToolbox decode</span><span class="arr">→</span>
     <span class="node cc">colour · per camera</span><span class="arr">→</span>
     <span class="node">Metal dissolve</span><span class="arr">→</span>
@@ -311,12 +312,100 @@
   </table>
 </section>
 
+
+<!-- ============ THE CORE ============ -->
+<section id="core">
+  <span class="kicker">The core</span>
+  <div class="lede">
+    <h2>Five parts, each owning exactly one fact.</h2>
+    <p>
+      This came out of a bad evening. A change to the multiview broke the colour panel, a change
+      to the colour panel broke the programme monitor, and a change to the decoder took every
+      camera down at once. None of them were hard bugs — they were the same bug.
+      <strong>Every window reached into the machinery, and the last one to touch it won.</strong>
+    </p>
+    <p>
+      So the desk has a core now. Data flows one way through it. A window sits at the end and
+      draws; a window never decides.
+    </p>
+  </div>
+
+  <div class="path">
+    <span class="node">FLEET · who is out there</span><span class="arr">→</span>
+    <span class="node">STREAMS · what is publishing</span><span class="arr">→</span>
+    <span class="node">DECODE · what is decoded</span><span class="arr">→</span>
+    <span class="node cc">PICTURES · who sees what</span><span class="arr">→</span>
+    <span class="node out">MIX · what goes to air</span>
+  </div>
+
+  <div class="grid g3">
+    <div class="card"><span class="n">FLEET</span>
+      <h4>Who is out there</h4>
+      <p>One control session per camera, held for the show. Knocking has a floor under it that
+         rises — and a camera whose pictures are arriving is on the network, whatever a ping
+         says. Frames are proof; a dropped packet is an opinion.</p></div>
+
+    <div class="card"><span class="n">STREAMS</span>
+      <h4>What is publishing</h4>
+      <p>A set of lenses, never a count. A camera is two boards and routinely publishes two of
+         its four streams — a number cannot say <em>which</em>. One fact, one field: the count is
+         derived from the set, so they can never disagree.</p></div>
+
+    <div class="card"><span class="n">DECODE</span>
+      <h4>What is decoded, and what it costs</h4>
+      <p>Never a reader on a lens nobody publishes. Lenses are added and removed in place, never
+         by rebuilding a source — rebuilding blacks out a picture for three seconds, and that is
+         precisely when somebody has pressed a programme key.</p></div>
+
+    <div class="card"><span class="n">PICTURES</span>
+      <h4>Who sees what</h4>
+      <p>One sink per camera, handed out, never owned by a view. This is the part that did not
+         exist: two windows fought over a single &ldquo;who am I watching&rdquo; setting, so opening one
+         blacked out the other.</p></div>
+
+    <div class="card"><span class="n">MIX</span>
+      <h4>What goes to air</h4>
+      <p>The cut happens on the press, before a single process is touched. Colour is applied per
+         camera <em>before</em> the dissolve — grading the composite smears one camera&rsquo;s
+         correction across the other for the length of every transition.</p></div>
+
+    <div class="card"><span class="n">UI</span>
+      <h4>Renders, decides nothing</h4>
+      <p>The multiview, the colour panel, the monitors and the output window are four designs of
+         one truth. That is the whole point: the same camera cannot be live in one window and
+         black in another.</p></div>
+  </div>
+
+  <h3>Each part has its own rules, and its own way back</h3>
+  <p class="lede">
+    Every rule was earned by a real failure, so deleting one means knowing which failure it
+    prevented. The rules that can be run are run: the decode planner, the byte splitter that
+    every lens of every camera passes through, and the fleet policies are pure functions with
+    the failures as tests.
+  </p>
+
+  <div class="path">
+    <span class="node">orahctl selftest</span><span class="arr">→</span>
+    <span class="node prev">65 checks, 0 failures</span>
+  </div>
+
+  <p style="margin-top:18px">
+    And the way back is per part, not per tree: a working state is tagged, and one part can be
+    restored out of it without disturbing the others. Full rules in
+    <a href="https://github.com/peterridzon/camorah/blob/master/docs/ARCHITECTURE.md"
+       target="_blank" rel="noopener">docs/ARCHITECTURE.md</a>.
+  </p>
+</section>
+
 <!-- ============ MULTIVIEW ============ -->
 <section id="multiview">
   <span class="kicker">Multiview</span>
   <div class="lede">
-    <h2>Two generators, because 24 portraits do not fit one screen.</h2>
-    <p>Twenty-four <strong>1440×1920</strong> portraits tile properly at 8×3 and nowhere else.</p>
+    <h2>Four multiviews, any of them on a screen of its own.</h2>
+    <p>Twenty-four <strong>1440×1920</strong> portraits tile properly at 8×3 and nowhere else.
+       Pull one out and the console moves up into the space rather than leaving a hole where a
+       wall used to be — and the strip stays behind, because it is how the window is called
+       back.</p>
   </div>
 
   <div class="stage">
@@ -329,7 +418,9 @@
   <span class="kicker">Colour</span>
   <div class="lede">
     <h2>Shading per camera, on the live path only.</h2>
-    <p>Lever for exposure, puck for gamma and black.
+    <p>ALL puts every camera side by side, each with its own picture, its own lens keys and a
+       tally across its head; press a name instead and you get that one in full. Lever for
+       exposure, pad with a centre point for gamma and black.
        <strong>The ISO recording never sees any of it.</strong></p>
   </div>
 

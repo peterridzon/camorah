@@ -808,15 +808,17 @@ h1 { margin:0; font-family:var(--mono); font-size:clamp(28px,4.2vw,44px);
 
       <div class="key"><div class="n">3</div><div>
         <h3>One lens, switchable</h3>
-        <p>Tiles show proxy streams from the nodes, one lens per camera. The selector
-           above changes which of the four — for every camera at once.</p>
+        <p>Every tile is one decoded lens, on the Mac. The keys 1–4 on a tile change
+           which of the camera&rsquo;s four it is showing; a lens that is not publishing
+           is dim, because half a camera is a normal camera.</p>
         <span class="fix">Rejected: a quad of all four lenses</span>
       </div></div>
 
       <div class="key"><div class="n">4</div><div>
         <h3>Desk runs at full quality</h3>
-        <p>Multiview runs on small proxies. The two cameras being decided on come from
-           the full stream — you cannot judge focus on a proxy.</p>
+        <p>A camera on the wall costs one decode. Programme and preview cost four each,
+           because the mix sends four lanes out — so the two cameras being decided on
+           are the only ones handled whole.</p>
       </div></div>
 
       <div class="key"><div class="n">5</div><div>

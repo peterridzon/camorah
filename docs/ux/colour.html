@@ -38,6 +38,54 @@
   .camtab.sel{background:linear-gradient(178deg,#ffd88a,var(--amber));color:#141417;
        border-color:#ffd88a;box-shadow:0 0 18px rgba(232,163,61,.55)}
   .camtab.pgm{border-color:#ff8a8f} .camtab.pvw{border-color:#8ff7b8}
+  .camtab.all{padding-left:16px;padding-right:16px}
+  .tabsep{width:1px;height:22px;background:var(--line);margin:0 4px}
+
+  /* ---------- every camera at once ----------
+     One card per camera, the way a shading panel does it: each is a thing of
+     its own with its own title bar, not a column in a table. On air fills the
+     whole bar, which is readable from across a gallery. */
+  .wall{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px}
+  .cc{flex:0 0 250px;background:var(--panel);border:1.5px solid var(--line);
+      border-radius:10px;overflow:hidden}
+  .cc.pgm{border-color:#ff8a8f} .cc.pvw{border-color:#8ff7b8}
+  .cc h4{margin:0;padding:7px 10px;display:flex;align-items:center;gap:8px;
+         background:#1b1b1e;font:700 12.5px/1 var(--mono);letter-spacing:.08em;
+         color:var(--amberGlow)}
+  .cc.pgm h4{background:#e0202a;color:#fff} .cc.pvw h4{background:#2fbf62;color:#04240f}
+  .cc h4 span{margin-left:auto;font:700 10px/1 var(--mono);letter-spacing:.12em}
+  .cc h4 i{width:6px;height:6px;border-radius:50%;background:var(--amber);display:block}
+  .cc.pgm h4 i{background:#fff} .cc.pvw h4 i{background:#04240f}
+  .ccbody{padding:9px;display:flex;flex-direction:column;gap:8px}
+  .ccshot{aspect-ratio:3/4;border-radius:5px;border:1px solid var(--line);position:relative;
+          overflow:hidden;background:linear-gradient(#2a2f3a,#0d0f13)}
+  .cclens{display:flex;gap:4px}
+  .cclens button{flex:1;padding:4px 0;border-radius:5px;border:1px solid var(--line);
+                 background:#1b1b1e;color:var(--amberGlow);font:700 9.5px/1 var(--mono);
+                 cursor:pointer}
+  .cclens button.on{background:linear-gradient(178deg,#ffd88a,var(--amber));
+                    border-color:var(--amberGlow);color:#141417}
+  /* The two controls a shader keeps a hand on, given the room they deserve. */
+  .cchand{display:flex;gap:7px;height:126px}
+  .cclev{width:44px;border-radius:7px;border:1px solid var(--line);background:#1b1b1e;
+         position:relative}
+  .cclev b{position:absolute;left:4px;right:4px;height:30px;border-radius:6px;
+           background:linear-gradient(178deg,#ffd88a,var(--amber))}
+  .cclev::after{content:"";position:absolute;left:6px;right:6px;top:50%;height:1px;
+                background:var(--line)}
+  .ccpad{flex:1;border-radius:7px;border:1px solid var(--line);background:#1b1b1e;
+         position:relative;overflow:hidden}
+  .ccpad::before,.ccpad::after{content:"";position:absolute;background:var(--line)}
+  .ccpad::before{left:50%;top:0;bottom:0;width:1px}
+  .ccpad::after{top:50%;left:0;right:0;height:1px}
+  .ccpad u{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;
+           border:1px solid var(--line);border-radius:50%}
+  .ccpad b{position:absolute;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;
+           background:linear-gradient(178deg,#ffd88a,var(--amber));
+           border:1px solid var(--amberGlow)}
+  .cccap{display:flex;gap:7px;font:700 8px/1 var(--mono);letter-spacing:.12em;
+         color:var(--faint)}
+  .cccap i{width:44px;font-style:normal} .cccap b{flex:1;text-align:center;font-weight:700}
   .camtab i{position:absolute;right:5px;bottom:4px;width:6px;height:6px;border-radius:50%;
        background:var(--amber);box-shadow:0 0 6px var(--amber)}
   .camtab.sel i{background:#141417;box-shadow:none}
@@ -167,8 +215,10 @@
     leaves for Vahana. <b>Recording stays ISO</b>: exactly what the camera sent, untouched.
     Nothing here reaches the camera either — the Orah protocol has no exposure or gamma
     control, so all of it happens in the Metal pass on this machine.
-    The left column is the shading panel — exposure lever and master-black puck, the two
-    controls that do most of the work on an RCP.
+    <b>ALL</b> is the first key of the strip: every camera side by side, each with its own
+    picture, its own lens keys and a tally across its head. Press a name instead and that one
+    opens in full. Either way the two controls a shader keeps a hand on are the lever and the
+    pad with the centre point.
   </p>
 
   <div class="panel path">
@@ -184,7 +234,9 @@
 
   <div class="top" id="tabs"></div>
 
-  <div class="stage">
+  <div class="wall" id="wall"></div>
+
+  <div class="stage" id="stage">
     <div class="panel rcp">
       <div class="lbl" style="margin-bottom:8px">Shading</div>
       <div class="shot" id="shot"><div class="sky"></div><span class="tag" id="shotTag"></span></div>
@@ -245,6 +297,9 @@ state[9].gain  = {r:1.06,g:1,b:.94,y:1.02}; state[9].black = -.06; state[9].gam 
 state[20].lift = {r:-.02,g:0,b:.03,y:0};    state[20].exposure = -.11; state[20].gam = -.07;
 
 let cam = 4, showGraded = true;
+/* ALL is simply the first key of the same strip. It was a separate mode switch
+   above a row of cameras — two questions for what is one decision. */
+let mode = 'all';
 const $ = s => document.querySelector(s);
 const S = () => state[cam];
 const touched = c => JSON.stringify(state[c]) !== JSON.stringify(blank());
@@ -264,9 +319,12 @@ const SLIDERS = [
 ];
 
 function drawTabs(){
-  $("#tabs").innerHTML = REAL.map(c=>{
-    const cls = [c===cam?"sel":"", c===PGM?"pgm":"", c===PVW?"pvw":""].join(" ");
-    return `<button class="camtab ${cls}" onclick="cam=${c};draw()">
+  const all = `<button class="camtab all ${mode==='all'?'sel':''}"
+      onclick="mode='all';draw()">ALL</button><span class="tabsep"></span>`;
+  $("#tabs").innerHTML = all + REAL.map(c=>{
+    const cls = [(mode==='detail'&&c===cam)?"sel":"", c===PGM?"pgm":"",
+                 c===PVW?"pvw":""].join(" ");
+    return `<button class="camtab ${cls}" onclick="cam=${c};mode='detail';draw()">
       ${NAMES[c]}${touched(c)?"<i></i>":""}</button>`;
   }).join("") + `<span class="spacer"></span>
     <span class="lbl">${REAL.filter(touched).length} of ${REAL.length} cameras graded</span>`;
@@ -415,9 +473,43 @@ function savePreset(){
   draw();
 }
 
-function draw(){ drawTabs(); drawWheels(); drawSliders(); drawShot(); drawLever(); drawPad(); }
+function drawWall(){
+  const wall = $("#wall"), stage = $("#stage");
+  wall.style.display  = mode === 'all' ? "flex" : "none";
+  stage.style.display = mode === 'all' ? "none" : "";
+  if(mode !== 'all') return;
+
+  wall.innerHTML = REAL.map(c=>{
+    const v = state[c];
+    const role = c===PGM ? "pgm" : c===PVW ? "pvw" : "";
+    const tag  = c===PGM ? "ON AIR" : c===PVW ? "PREVIEW" : "";
+    const lens = lensOf[c] || 0;
+    return `<div class="cc ${role}">
+      <h4>${NAMES[c].toUpperCase()}<span>${tag}</span>${touched(c)?"<i></i>":""}</h4>
+      <div class="ccbody">
+        <div class="ccshot"></div>
+        <div class="cclens">${[0,1,2,3].map(l=>
+          `<button class="${l===lens?'on':''}" onclick="lensOf[${c}]=${l};drawWall()">${l+1}</button>`
+        ).join("")}</div>
+        <div class="cchand">
+          <div class="cclev"><b style="top:${(1-(v.exposure+1)/2)*96}px"></b></div>
+          <div class="ccpad"><u></u>
+            <b style="left:${50+v.gam*42}%;top:${50-v.black*42}%"></b></div>
+        </div>
+        <div class="cccap"><i>EXP</i><b>GAMMA · BLACK</b></div>
+      </div>
+    </div>`;
+  }).join("");
+}
+const lensOf = {};
+
+function draw(){
+  drawTabs(); drawWall();
+  if(mode === 'all') return;
+  drawWheels(); drawSliders(); drawShot(); drawLever(); drawPad();
+}
 draw();
-addEventListener("resize", () => { drawLever(); drawPad(); });
+addEventListener("resize", () => { if(mode !== 'all'){ drawLever(); drawPad(); } });
 </script>
 
 <script>
