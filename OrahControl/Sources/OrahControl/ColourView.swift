@@ -46,11 +46,23 @@ struct ColourView: View {
             if mode == .all {
                 allCameras
             } else {
-                HStack(alignment: .top, spacing: 12) {
-                    shading
-                    trim
+                ScrollView {
+                    VStack(spacing: 12) {
+                        // The picture is what the eye is on while the hand
+                        // works, so it runs across the top rather than sitting
+                        // inside one of the columns. It used to live in the trim
+                        // panel, which put the wheels level with the picture and
+                        // the lever a long way below them — one panel reading as
+                        // two unrelated things.
+                        picturePanel
+
+                        HStack(alignment: .top, spacing: 12) {
+                            shading
+                            trim
+                        }
+                    }
+                    .padding(12)
                 }
-                .padding(12)
             }
 
             Spacer(minLength: 0)
@@ -180,23 +192,25 @@ struct ColourView: View {
     /// Four lenses rather than one because a camera is four sensors and they do
     /// not always match each other either — a correction that fixes the front
     /// can easily wreck the one facing the lights.
-    private var pictures: some View {
-        VStack(alignment: .leading, spacing: 7) {
+    private var picturePanel: some View {
+        VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 9) {
-                Text(showsGraded ? "GRADED" : "BYPASS")
-                    .font(Theme.label(9.5)).tracking(2)
-                    .foregroundStyle(showsGraded ? Theme.amber : Theme.dim)
-                Text(current.map { model.camera(slot: $0)?.name.uppercased() ?? "—" } ?? "—")
-                    .font(Theme.value(10)).foregroundStyle(Theme.faint)
+                Text("PREVIEW — ALL FOUR LENSES")
+                    .font(Theme.label(9.5)).tracking(2).foregroundStyle(Theme.faint)
+                if let slot = current {
+                    tally(slot: slot)
+                }
                 Spacer()
-                Text("all four lenses")
-                    .font(Theme.label(9)).tracking(1.2).foregroundStyle(Theme.dead)
+                // Bypass belongs with the pictures: it is a question about what
+                // is on screen, not about the controls.
+                HStack(spacing: 5) {
+                    abButton("BYPASS", on: !showsGraded) { showsGraded = false }
+                    abButton("GRADED", on: showsGraded) { showsGraded = true }
+                }
+                .frame(width: 190)
             }
 
-            // Four across, above the wheels. The picture is what the eye is on
-            // while the hand works, so it sits over the controls rather than
-            // beside them — anything to the side of a wheel competes with it.
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 ForEach(0..<4, id: \.self) { lens in
                     ZStack(alignment: .bottomLeading) {
                         Rectangle().fill(.black)
@@ -212,17 +226,39 @@ struct ColourView: View {
                     .frame(maxHeight: 300)
                     .clipShape(RoundedRectangle(cornerRadius: 5))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 5).stroke(Theme.line, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 5)
+                            .stroke(pictureBorder, lineWidth: 1.5)
                     }
                 }
             }
             .frame(maxWidth: .infinity)
         }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
         // The switcher only makes these pictures while somebody is looking.
         .onAppear { model.watch(slot: current, bypass: !showsGraded) }
         .onDisappear { model.watch(slot: nil) }
         .onChange(of: current) { model.watch(slot: current, bypass: !showsGraded) }
         .onChange(of: showsGraded) { model.watch(slot: current, bypass: !showsGraded) }
+    }
+
+    private var pictureBorder: Color {
+        current == model.programSlot ? Theme.program
+        : current == model.previewSlot ? Theme.preview : Theme.line
+    }
+
+    private func tally(slot: Int) -> some View {
+        let onAir = slot == model.programSlot
+        let next = slot == model.previewSlot
+        let text = onAir ? "ON AIR" : next ? "PREVIEW"
+                 : (model.camera(slot: slot)?.name.uppercased() ?? "—")
+        return Text(text)
+            .font(.system(size: 8.5, weight: .bold, design: .monospaced)).tracking(1)
+            .foregroundStyle(onAir ? .white : next ? Color(hex: 0x04240F) : Theme.amberGlow)
+            .padding(.horizontal, 6).padding(.vertical, 3)
+            .background(onAir ? AnyShapeStyle(Theme.program)
+                        : next ? AnyShapeStyle(Theme.preview) : AnyShapeStyle(Theme.raised))
+            .clipShape(RoundedRectangle(cornerRadius: 2))
     }
 
     /// Every camera side by side.
@@ -247,11 +283,6 @@ struct ColourView: View {
     private var shading: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("SHADING").font(Theme.label(9.5)).tracking(2).foregroundStyle(Theme.faint)
-
-            HStack(spacing: 5) {
-                abButton("BYPASS", on: !showsGraded) { showsGraded = false }
-                abButton("GRADED", on: showsGraded) { showsGraded = true }
-            }
 
             HStack(alignment: .top, spacing: 11) {
                 lever
@@ -347,7 +378,9 @@ struct ColourView: View {
 
     private var trim: some View {
         VStack(alignment: .leading, spacing: 14) {
-            pictures
+            // Same label, same size, same place as the shading panel's — which
+            // is what puts the wheels on one line with the lever.
+            Text("TRIM").font(Theme.label(9.5)).tracking(2).foregroundStyle(Theme.faint)
 
             HStack(alignment: .top, spacing: 12) {
                 wheel("LIFT", \.lift, range: -0.5...0.5, base: 0)
