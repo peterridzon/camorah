@@ -56,14 +56,11 @@ public enum DeskPlanner {
         // Rule: only what is on the wire. A reader attached to a lens nobody is
         // publishing to relaunches a process for ever.
         //
-        // And only what is *whole*. A camera that is still coming up, or that
-        // came up with three of its four streams, is a setup problem — it is
-        // shown in the rig check with what is missing, and it is not on the
-        // desk. The exception is a camera already on air: losing a lens
-        // mid-show is not a reason to take the programme off the air.
-        let live = ready.filter { slot, lenses in
-            !lenses.isEmpty && (isReadyForAir(lenses: lenses) || slot == program)
-        }
+        // Whole or not. A camera with three of its four streams is a shot with
+        // a hole in it, and the desk's job is to show it — the operator decides
+        // whether to use it. Refusing to decode it meant its tile was black and
+        // its key dead, which is the desk hiding a picture that exists.
+        let live = ready.filter { !$0.value.isEmpty }
         var sources: [Int: [Int]] = [:]
 
         // Rule: the desk pair decodes every lens it has, because the mix sends

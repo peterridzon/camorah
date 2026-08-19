@@ -29,20 +29,22 @@ public enum DeskPlanSelfTest {
                   "got \(plan.sources)")
         }
 
-        // Half a camera is not a camera you can cut to. It belongs in setup.
+        // Half a camera is still a picture, and a picture belongs on the wall.
+        // Refusing to decode it left the operator looking at a black tile for a
+        // camera that was plainly sending something.
         do {
             let plan = DeskPlanner.plan(ready: [8: [2, 3]], program: nil, preview: nil,
                                         budget: 12)
-            check("half a camera is not in the switching feed", plan.sources.isEmpty,
-                  "got \(plan.sources)")
+            check("half a camera is decoded", plan.lenses(for: 8) == [2],
+                  "got \(plan.lenses(for: 8))")
         }
 
-        // Three of four is a fault, not a camera.
+        // And on the desk it gets every lens it has.
         do {
-            let plan = DeskPlanner.plan(ready: [8: [0, 1, 2]], program: nil, preview: nil,
+            let plan = DeskPlanner.plan(ready: [8: [0, 1, 2]], program: 8, preview: nil,
                                         budget: 12)
-            check("three of four lenses is still not on the desk", plan.sources.isEmpty,
-                  "got \(plan.sources)")
+            check("three of four on air decodes three", plan.lenses(for: 8) == [0, 1, 2],
+                  "got \(plan.lenses(for: 8))")
         }
 
         // But a camera already on air is not dropped because it lost a lens.

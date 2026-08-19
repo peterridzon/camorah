@@ -13,14 +13,17 @@ public enum WallPolicy {
 
     /// What a camera is doing, as far as the wall is concerned.
     public enum Standing: Equatable {
-        /// Up, all four lenses, ready to be cut to.
+        /// Up, all four lenses.
         case live
+        /// Sending pictures, but not all four. A camera you can cut to — three
+        /// lanes of four is a degraded shot, and a degraded shot beats black.
+        case partial
         /// Nothing wrong; simply not started. Its key says START.
         case idle
         /// On its way up, inside the window a camera is allowed.
         case starting
-        /// Something is wrong: refused to start, came up half, locked out, or
-        /// off the network. Belongs in the rig check, not on the wall.
+        /// No pictures at all: refused to start, off the network, or holding a
+        /// dead session. This is the only thing a key must refuse.
         case fault
     }
 
@@ -51,14 +54,15 @@ public enum WallPolicy {
         // network" with four lit lenses underneath, which is the desk arguing
         // with itself in front of the operator.
         if lensesReady >= 4 { return .live }
-        if !onNetwork || lockedOut { return .fault }
+        if lensesReady == 0, !onNetwork || lockedOut { return .fault }
 
         guard let since = startRequestedSecondsAgo else {
-            // Never asked to start. Half a camera nobody started is still a
-            // fault — something is publishing that should not be.
-            return lensesReady == 0 ? .idle : .fault
+            // Never asked to start. Half a camera nobody started is odd, but it
+            // is a picture, and a picture is worth having.
+            return lensesReady == 0 ? .idle : .partial
         }
-        return since <= startupWindow ? .starting : .fault
+        if since <= startupWindow { return lensesReady == 0 ? .starting : .partial }
+        return lensesReady == 0 ? .fault : .partial
     }
 
     /// Every camera is drawn on the multiview. Including the broken ones.
@@ -76,11 +80,15 @@ public enum WallPolicy {
 
     /// Whether this camera may be cut to.
     ///
-    /// A fault cannot: pressing its key would put a black rectangle, or half a
-    /// camera, on air. A camera that is starting cannot either — it has no
-    /// picture yet, and a key that works only sometimes is worse than one that
-    /// plainly does not.
-    public static func canGoToAir(_ standing: Standing) -> Bool { standing == .live }
+    /// **The test is whether there is a picture, not whether it is perfect.**
+    /// This was `.live` only for an hour, and that hour was one in which a
+    /// camera missing a single lens could not be cut to at all — the desk
+    /// refusing a shot the operator could plainly see on the wall. Three lanes
+    /// of four is a degraded shot; black is not a shot. The key exists to stop
+    /// the second one.
+    public static func canGoToAir(_ standing: Standing) -> Bool {
+        standing == .live || standing == .partial
+    }
 
     /// Every camera gets a key, working or not.
     ///
@@ -101,7 +109,7 @@ public enum WallPolicy {
         switch standing {
         case .idle:     .start
         case .starting: .starting
-        case .live:     .stop
+        case .live, .partial: .stop
         // A fault is not on the wall, but the rig check shows the same key and
         // there the answer is to try again.
         case .fault:    .start
