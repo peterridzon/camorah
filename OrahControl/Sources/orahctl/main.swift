@@ -38,6 +38,7 @@ func usage() -> Never {
       orahctl renumber                    Work out new numbers and write RENUMBER.md
       orahctl addresses                   Write the DHCP reservation plan
       orahctl deskcheck <base> [secs]     Does a stream reach the desk monitor?
+      orahctl lenscheck <base> [secs]     Which of the four lenses actually decode
       orahctl starttest <host> [port]     Try every destination shape in ONE session
 
     NOTES:
@@ -919,6 +920,50 @@ case "tag", "fleet", "renumber", "addresses":
         exit(1)
     }
 
+case "lenscheck":
+    // Which of a camera's four streams actually decode.
+    //
+    // The desk can only say "no picture", and a path that MediaMTX calls ready
+    // is not the same as one that produces frames. This reads all four at once,
+    // outside the app, and counts what each one gives — so "lens 2 does not
+    // work" stops being a impression and becomes a number.
+    guard args.count > 1 else { usage() }
+    do {
+        let base = args[1].hasSuffix("/") ? args[1] : args[1] + "/"
+        let seconds = args.count > 2 ? Double(args[2]) ?? 12 : 12
+        let counts = LensCounter()
+
+        var readers: [H264StreamReader] = []
+        for (index, lens) in Switcher.lenses.enumerated() {
+            let reader = H264StreamReader(url: base + lens)
+            reader.onFrame = { buffer, _ in
+                counts.record(index,
+                              width: CVPixelBufferGetWidth(buffer),
+                              height: CVPixelBufferGetHeight(buffer))
+            }
+            try reader.start()
+            readers.append(reader)
+        }
+
+        print("reading  \(base){0_0,0_1,1_0,1_1} for \(Int(seconds))s\n")
+        try await Task.sleep(for: .seconds(seconds))
+        readers.forEach { $0.stop() }
+
+        var bad = false
+        for (index, lens) in Switcher.lenses.enumerated() {
+            let (frames, size) = counts.report(index)
+            let fps = Double(frames) / seconds
+            let verdict = frames == 0 ? "NOTHING" : String(format: "%.1f fps", fps)
+            print(String(format: "  lens %d  %-4@  %6d frames  %@  %@",
+                         index + 1, lens as NSString, frames, size, verdict))
+            if frames == 0 { bad = true }
+        }
+        exit(bad ? 1 : 0)
+    } catch {
+        print("lenscheck: \(error)")
+        exit(1)
+    }
+
 case "deskcheck":
     // Answers one question: does a picture published to RTMP come back out of
     // the switcher's monitor tap? That is the whole path the desk depends on —
@@ -994,5 +1039,22 @@ final class MonitorCounter: @unchecked Sendable {
 
     var description: String {
         lock.withLock { width == 0 ? "no frames" : "\(width)×\(height)" }
+    }
+}
+
+/// Frames per lens, counted from the decoder's queue.
+final class LensCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var frames = [Int](repeating: 0, count: 4)
+    private var sizes = [String](repeating: "—", count: 4)
+
+    func record(_ lens: Int, width: Int, height: Int) {
+        lock.lock(); defer { lock.unlock() }
+        frames[lens] += 1
+        sizes[lens] = "\(width)×\(height)"
+    }
+    func report(_ lens: Int) -> (Int, String) {
+        lock.lock(); defer { lock.unlock() }
+        return (frames[lens], sizes[lens])
     }
 }

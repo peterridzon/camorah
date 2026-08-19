@@ -206,7 +206,10 @@ final class AppModel {
                let camera = cameras.first(where: { $0.serial == serial }) {
                 seen.lockedOut = camera.state == .busy
                 seen.host = camera.host
-                seen.onNetwork = camera.state != .disconnected
+                // Streams arriving are proof the camera is there, whatever the control
+        // session says — the session drops on its own and the camera goes on
+        // publishing right through it.
+        seen.onNetwork = camera.state != .disconnected || !camera.lensesReady.isEmpty
                 seen.controlConnected = camera.state == .connected || camera.state == .streaming
                 seen.lensesArriving = camera.lensesArriving
                 if let started = startRequestedAt[camera.slot] {
@@ -455,6 +458,7 @@ final class AppModel {
                 }
             }
             switcher.onInspectCameras = { [weak self] pictures in
+                self?.tileFrames.record(pictures.keys)
                 guard let self else { return }
                 for (slot, picture) in pictures { self.cameraSink(slot: slot).push(picture) }
             }
@@ -471,6 +475,20 @@ final class AppModel {
             lastError = "Switcher: \(error)"
             Log.error("app", "switcher: \(error)")
         }
+    }
+
+    /// How many pictures each camera's own sink has been given. A tile that is
+    /// not updating is either being sent nothing, or is being sent something it
+    /// is not drawing, and these two cases need different fixes.
+    let tileFrames = TileFrameCount()
+
+    final class TileFrameCount: @unchecked Sendable {
+        private let lock = NSLock()
+        private var counts: [Int: Int] = [:]
+        func record<S: Sequence>(_ slots: S) where S.Element == Int {
+            lock.withLock { for slot in slots { counts[slot, default: 0] += 1 } }
+        }
+        func count(_ slot: Int) -> Int { lock.withLock { counts[slot] ?? 0 } }
     }
 
     /// Counts what the monitors are actually being given, so a black screen can
@@ -780,10 +798,35 @@ final class AppModel {
 
     // MARK: - Camera control
 
+    /// Starts every camera that is not already up.
+    ///
+    /// **It never touches one that is.** Start All used to mean all of them, and
+    /// on a rig where half the cameras are already live that is a button which
+    /// puts the gallery in the dark for twenty seconds — including the camera
+    /// on air. Once a show is running the only safe thing it can do is bring up
+    /// what is missing, one by one, and leave the rest alone.
     func startAllCameras() {
-        for camera in cameras { startCamera(camera.slot, reason: "operator pressed Start All") }
+        let idle = cameras.filter { standing(slot: $0.slot) != .live }
+        guard !idle.isEmpty else {
+            Log.info("cam", "Start All: every camera is already up — nothing to do")
+            lastError = "Every camera is already up"
+            return
+        }
+        Log.info("cam", "Start All: starting \(idle.count) of \(cameras.count) — "
+                 + "the ones already up are left alone")
+        for camera in idle {
+            startCamera(camera.slot, reason: "operator pressed Start All")
+        }
     }
 
+    /// How many cameras Start All would actually touch, so the key can say so
+    /// rather than the operator finding out afterwards.
+    var camerasNeedingStart: Int {
+        cameras.filter { standing(slot: $0.slot) != .live }.count
+    }
+
+    /// Stops everything, including what is on air. There is no version of this
+    /// that is safe mid-show, so it is not made to look like one.
     func stopAllCameras() {
         for camera in cameras { stopCamera(camera.slot) }
     }
@@ -1124,6 +1167,11 @@ final class AppModel {
     /// avoid, so the setter does both or neither.
     func selectPreview(_ slot: Int) {
         guard slot != programSlot else { return }
+        // Cueing a camera that cannot go to air is cueing a black rectangle.
+        guard WallPolicy.canGoToAir(standing(slot: slot)) else {
+            Log.info("desk", "cam\(slot) is not ready — not cued")
+            return
+        }
         previewSlot = slot
         syncDesk()
     }
@@ -1177,6 +1225,11 @@ final class AppModel {
     /// goes to air immediately — that is what makes it the programme bus.
     func takeToAir(_ slot: Int) {
         guard slot != programSlot else { return }
+        guard WallPolicy.canGoToAir(standing(slot: slot)) else {
+            lastError = "Cam \(slot) is not ready — see rig check"
+            Log.info("desk", "cam\(slot) refused the programme bus — not ready")
+            return
+        }
         transitionTask?.cancel()
         mix = 0
         if previewSlot == slot { previewSlot = programSlot }
@@ -1351,7 +1404,10 @@ final class AppModel {
         guard !deskSources.isEmpty else { return }
         let read = deskSources
             .sorted { $0.key < $1.key }
-            .map { "cam\($0.key) read \($0.value.framesIn)" }
+            .map { slot, source in
+                "cam\(slot) read \(source.framesIn) lens \(lens(for: slot) + 1)"
+                + " tile \(tileFrames.count(slot))"
+            }
             .joined(separator: " · ")
         let counts = monitorFrames.counts
         Log.info("desk", "\(read) · monitor program \(counts.program) preview \(counts.preview)")
@@ -1578,8 +1634,12 @@ final class AppModel {
             out[index] = unplaced.remove(at: found)
         }
         // The rest fall into the first free keys, in rig order, so a fresh
-        // install is usable before anybody has assigned anything.
-        for camera in unplaced {
+        // install is usable before anybody has assigned anything — but a camera
+        // that cannot be cut to does not take a position from one that can. A
+        // camera somebody placed by hand keeps its key whatever happens to it,
+        // and goes dark instead: keys must not move under a hand that has
+        // learnt them.
+        for camera in unplaced where WallPolicy.deservesAKey(standing(slot: camera.slot)) {
             guard let free = out.firstIndex(where: { $0 == nil }) else { break }
             out[free] = camera
         }
@@ -2156,12 +2216,18 @@ final class AppModel {
             return .beingFixed(sinceSeconds: Int(Date().timeIntervalSince(fixing)))
         }
 
-        if camera.state == .busy { return .lockedOut }
+        // Locked means the camera will not take a command. If it is publishing
+        // all four streams anyway, it is still a picture on the desk, and
+        // calling it locked hides that.
+        if camera.state == .busy, camera.lensesReady.count < 4 { return .lockedOut }
 
         var seen = RigEvaluator.Observation()
         seen.serial = camera.serial
         seen.host = camera.host
-        seen.onNetwork = camera.state != .disconnected
+        // Streams arriving are proof the camera is there, whatever the control
+        // session says — the session drops on its own and the camera goes on
+        // publishing right through it.
+        seen.onNetwork = camera.state != .disconnected || !camera.lensesReady.isEmpty
         seen.controlConnected = camera.state == .connected || camera.state == .streaming
         seen.lensesArriving = camera.lensesArriving
         if let started = startRequestedAt[slot] {
@@ -2180,7 +2246,8 @@ final class AppModel {
     func standing(slot: Int) -> WallPolicy.Standing {
         guard let camera = camera(slot: slot) else { return .fault }
         let since = startRequestedAt[slot].map { Date().timeIntervalSince($0) }
-        return WallPolicy.standing(onNetwork: camera.state != .disconnected,
+        return WallPolicy.standing(onNetwork: camera.state != .disconnected
+                                              || !camera.lensesReady.isEmpty,
                                    lockedOut: camera.state == .busy,
                                    lensesReady: camera.lensesReady.count,
                                    startRequestedSecondsAgo: since)

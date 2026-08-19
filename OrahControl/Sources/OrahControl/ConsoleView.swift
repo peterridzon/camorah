@@ -112,6 +112,15 @@ private struct KeyCap: View {
     }
     private var accent: Color { isProgramBus ? Theme.program : Theme.preview }
 
+    /// A camera that cannot go to air holds its key — keys must not move under
+    /// a hand that has learnt them — but the key is dark and will not press.
+    /// This is what stops a fault reaching the programme, now that the wall
+    /// shows faults rather than hiding them.
+    private var isUsable: Bool {
+        guard let slot = camera?.slot else { return false }
+        return WallPolicy.canGoToAir(model.standing(slot: slot))
+    }
+
     var body: some View {
         Button {
             guard let slot = camera?.slot else { return }
@@ -123,7 +132,8 @@ private struct KeyCap: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: 9)
                             .stroke(camera == nil ? Theme.dead
-                                    : isLit ? accent.opacity(0.95) : Theme.amber,
+                                    : isLit ? accent.opacity(0.95)
+                                    : isUsable ? Theme.amber : Theme.dead,
                                     lineWidth: 1.5)
                     }
                     .shadow(color: isLit ? accent.opacity(0.32) : .clear, radius: 6)
@@ -131,10 +141,11 @@ private struct KeyCap: View {
                 if camera != nil {
                     // The lamp. Read peripherally, without looking at the text.
                     Capsule()
-                        .fill(isLit ? Color.white : Theme.amber)
+                        .fill(isLit ? Color.white : isUsable ? Theme.amber : Theme.dead)
                         .frame(height: 3)
                         .padding(.horizontal, 13)
-                        .shadow(color: isLit ? .white.opacity(0.5) : Theme.amber.opacity(0.45),
+                        .shadow(color: isLit ? .white.opacity(0.5)
+                                : isUsable ? Theme.amber.opacity(0.45) : .clear,
                                 radius: 3)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(.top, 5)
@@ -148,7 +159,7 @@ private struct KeyCap: View {
                         .minimumScaleFactor(0.55)
                         .lineLimit(2)
                         .foregroundStyle(isLit ? (isProgramBus ? .white : Color(hex: 0x04240F))
-                                              : Theme.amberGlow)
+                                         : isUsable ? Theme.amberGlow : Theme.faint)
                         .padding(.horizontal, 4)
                         .padding(.top, 10)
                 }
@@ -166,8 +177,12 @@ private struct KeyCap: View {
             .aspectRatio(1, contentMode: .fit)
         }
         .buttonStyle(.plain)
-        .disabled(camera == nil)
-        .help(camera.map { "\($0.name) · CAM \(String(format: "%02d", $0.slot))" } ?? "")
+        .disabled(camera == nil || !isUsable)
+        .help(camera.map { camera in
+            let base = "\(camera.name) · CAM \(String(format: "%02d", camera.slot))"
+            return isUsable ? base
+                 : base + " — not ready: \(model.state(slot: camera.slot).label.lowercased())"
+        } ?? "")
     }
 
     private var litBody: Color { isProgramBus ? Theme.program : Theme.preview }

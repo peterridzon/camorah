@@ -41,8 +41,17 @@ public enum WallPolicy {
                                 lockedOut: Bool,
                                 lensesReady: Int,
                                 startRequestedSecondsAgo: TimeInterval?) -> Standing {
-        if !onNetwork || lockedOut { return .fault }
+        // Pictures beat every other opinion, and they are checked first.
+        //
+        // A camera sending all four streams is a camera you can cut to, whatever
+        // the control session thinks. These sessions drop on their own — a
+        // reconnect, a reboot of the desk, a socket nobody closed — and the
+        // camera goes on publishing throughout. Judging it by the session put
+        // two perfectly good cameras in the rig check under "not on the
+        // network" with four lit lenses underneath, which is the desk arguing
+        // with itself in front of the operator.
         if lensesReady >= 4 { return .live }
+        if !onNetwork || lockedOut { return .fault }
 
         guard let since = startRequestedSecondsAgo else {
             // Never asked to start. Half a camera nobody started is still a
@@ -52,15 +61,34 @@ public enum WallPolicy {
         return since <= startupWindow ? .starting : .fault
     }
 
-    /// Whether this camera is drawn on the multiview.
+    /// Every camera is drawn on the multiview. Including the broken ones.
     ///
-    /// A camera that has not been started yet stays: its tile is where Start
-    /// is pressed. A camera that is starting stays: watching it come up is the
-    /// point of the tile. A fault goes — to the rig check, which says what is
-    /// wrong with it and offers to fix it.
-    public static func belongsOnWall(_ standing: Standing) -> Bool {
-        standing != .fault
-    }
+    /// This was the other way round for an afternoon — a fault was taken off
+    /// the wall and left to the rig check — and that is wrong for the screen an
+    /// operator actually watches. A camera that drops out mid-show is exactly
+    /// what they need to see, and a tile that quietly disappears tells them
+    /// nothing: they find out when they reach for it.
+    ///
+    /// So the wall shows everything and says what is wrong on the tile. What
+    /// protects the programme is not hiding the camera, it is the key: a fault
+    /// cannot be cut to, and its key on the desk is dark.
+    public static func belongsOnWall(_ standing: Standing) -> Bool { true }
+
+    /// Whether this camera may be cut to.
+    ///
+    /// A fault cannot: pressing its key would put a black rectangle, or half a
+    /// camera, on air. A camera that is starting cannot either — it has no
+    /// picture yet, and a key that works only sometimes is worse than one that
+    /// plainly does not.
+    public static func canGoToAir(_ standing: Standing) -> Bool { standing == .live }
+
+    /// Every camera gets a key, working or not.
+    ///
+    /// Keys must not move. A hand that has learnt where camera 12 is must find
+    /// it there when camera 10 dies, and find it there again when camera 10
+    /// comes back — so a fault keeps its position and goes dark rather than
+    /// letting everything after it shuffle up one.
+    public static func deservesAKey(_ standing: Standing) -> Bool { true }
 
     /// What the camera's own key should read.
     public enum Key: Equatable {

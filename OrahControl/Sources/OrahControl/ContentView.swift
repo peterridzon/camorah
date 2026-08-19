@@ -592,7 +592,14 @@ private struct ControlRail: View {
             VStack(alignment: .leading, spacing: 16) {
                 Group {
                     SectionLabel(text: "Cameras")
-                    RailButton(title: "Start all", tint: Theme.orange) { model.startAllCameras() }
+                    // Says how many it will touch, because the answer is never
+                    // "all of them" once a show is running — the ones already up
+                    // are left exactly as they are.
+                    RailButton(title: model.camerasNeedingStart == 0
+                               ? "Start all — none missing"
+                               : "Start the \(model.camerasNeedingStart) not running",
+                               tint: Theme.orange) { model.startAllCameras() }
+                        .disabled(model.camerasNeedingStart == 0)
                     RailButton(title: "Stop all") { model.stopAllCameras() }
                 }
 

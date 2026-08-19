@@ -39,15 +39,34 @@ public enum WallPolicySelfTest {
         // Past the window and still short: not slow, broken.
         check("half a camera past the window is a fault", standing(true, false, 2, 45) == .fault)
         check("three of four is a fault too", standing(true, false, 3, 45) == .fault)
-        check("a fault is off the wall",
-              !WallPolicy.belongsOnWall(standing(true, false, 3, 45)))
+        // The wall shows it — that is the screen an operator watches, and a
+        // camera that vanishes quietly is one they find out about by reaching
+        // for it. What protects the programme is the key, not the hiding.
+        check("a fault is still on the wall",
+              WallPolicy.belongsOnWall(standing(true, false, 3, 45)))
+        check("but it cannot be cut to",
+              !WallPolicy.canGoToAir(standing(true, false, 3, 45)))
+        check("and it keeps its key, dark",
+              WallPolicy.deservesAKey(standing(true, false, 3, 45)))
+        check("a camera coming up cannot be cut to either",
+              !WallPolicy.canGoToAir(standing(true, false, 2, 8)))
+        check("a whole camera can",
+              WallPolicy.canGoToAir(standing(true, false, 4, 8)))
 
         // Nothing at all, long after Start was pressed.
         check("a camera that sent nothing is a fault", standing(true, false, 0, 60) == .fault)
 
         // Held session and off the network are faults whatever else is true.
-        check("locked out is a fault", standing(true, true, 4, 10) == .fault)
-        check("off the network is a fault", standing(false, false, 4, 10) == .fault)
+        // Pictures outrank the control session and the ping alike. Both of
+        // these drew a camera as gone with four lit lenses under it.
+        check("four streams beat a lost control session",
+              standing(false, false, 4, 10) == .live)
+        check("four streams beat a locked session too",
+              standing(true, true, 4, 10) == .live)
+        check("but a locked camera with no pictures is a fault",
+              standing(true, true, 0, 10) == .fault)
+        check("and so is one that is off the network with none",
+              standing(false, false, 0, 10) == .fault)
 
         // Streams arriving that nobody asked for, and not all of them: that is
         // a camera left half-running by something else, and it is a fault.

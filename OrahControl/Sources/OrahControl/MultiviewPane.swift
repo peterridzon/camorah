@@ -201,13 +201,12 @@ struct MultiviewPane: View {
     }
 
     private var sources: some View {
-        // Only cameras that are a shot, or on their way to being one. A camera
-        // that refused to start, came up with three of its four streams, or is
-        // holding a dead session is not drawn here — it looks exactly like a
-        // camera you could cut to, and it is not. The rig check has it, with
-        // what is wrong written on it.
-        let wall = Set(model.wallCameras.map(\.slot))
-        let present = model.buttons.compactMap { $0 }.filter { wall.contains($0.slot) }
+        // Everything, working or not. This is the screen the operator watches,
+        // and a camera that drops out mid-show is precisely what they need to
+        // see — a tile that quietly disappears tells them nothing until they
+        // reach for it. The tile says what is wrong; the key on the desk is
+        // what stops it reaching air.
+        let present = model.buttons.compactMap { $0 }
         let columns = Array(repeating: GridItem(.flexible(), spacing: 5), count: layout.columns)
 
         return Group {
@@ -466,6 +465,7 @@ private struct SourceTile: View {
     let camera: AppModel.Camera
     var showsLabel = true
 
+    private var isFault: Bool { model.standing(slot: camera.slot) == .fault }
     private var isProgram: Bool { camera.slot == model.programSlot }
     private var isPreview: Bool { camera.slot == model.previewSlot }
 
@@ -519,6 +519,22 @@ private struct SourceTile: View {
                     .padding(3)
                 }
 
+                if isFault {
+                    // Said plainly, on the screen that is being watched. What is
+                    // actually wrong is written across the middle of the tile by
+                    // the status; this is the mark that carries across a room.
+                    Text("FAULT")
+                        .font(.system(size: 7.5, weight: .bold, design: .monospaced))
+                        .tracking(0.8)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4).padding(.vertical, 2)
+                        .background(Theme.red)
+                        .clipShape(RoundedRectangle(cornerRadius: 2))
+                        .padding(3)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity,
+                               alignment: .topLeading)
+                }
+
                 Text(isProgram ? "PGM" : isPreview ? "PVW"
                      : String(format: "%02d", camera.slot))
                     .font(.system(size: 7.5, weight: .bold, design: .monospaced))
@@ -548,6 +564,7 @@ private struct SourceTile: View {
         .overlay {
             RoundedRectangle(cornerRadius: 4)
                 .stroke(isProgram ? Theme.program : isPreview ? Theme.preview
+                        : isFault ? Theme.red.opacity(0.9)
                         : Color(hex: 0x1E1E22), lineWidth: 2)
         }
         .onTapGesture { model.selectPreview(camera.slot) }
